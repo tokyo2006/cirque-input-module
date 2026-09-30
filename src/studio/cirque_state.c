@@ -13,6 +13,7 @@
 #include <zephyr/sys/util.h>
 
 #include <zmk/cirque_state.h>
+#include <zmk/cirque_settings.h>
 #include <zmk/events/trackpad_status_changed.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -166,8 +167,12 @@ int cirque_state_load_from_dt(const struct device *dev) {
 }
 
 int cirque_state_load_from_settings(const struct device *dev) {
+#if IS_ENABLED(CONFIG_ZMK_CUSTOM_SETTINGS)
+    return cirque_settings_load_cb(dev);
+#else
     ARG_UNUSED(dev);
     return 0;
+#endif
 }
 
 int cirque_state_apply_all(const struct device *dev) {

@@ -14,6 +14,8 @@
 #include <tokyo2006/cirque/cirque_relay.h>
 #endif
 
+#include <zmk/cirque_settings.h>
+
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -30,14 +32,6 @@ static struct zmk_rpc_custom_subsystem_meta cirque_subsystem_meta = {
 ZMK_RPC_CUSTOM_SUBSYSTEM(tokyo2006__cirque, &cirque_subsystem_meta, cirque_rpc_handle_request);
 
 ZMK_RPC_CUSTOM_SUBSYSTEM_RESPONSE_BUFFER(tokyo2006__cirque, tokyo2006_cirque_Response);
-
-#if IS_ENABLED(CONFIG_ZMK_CUSTOM_SETTINGS)
-ZMK_CUSTOM_SETTING_DEFINE(cirque_sample_bool, "tokyo2006__cirque", "sample_bool",
-                          ZMK_CUSTOM_SETTING_VALUE_TYPE_BOOL, ZMK_CUSTOM_SETTING_VALUE_BOOL(true),
-                          ZMK_CUSTOM_SETTING_CONFIDENTIALITY_RPC_PUBLIC,
-                          ZMK_CUSTOM_SETTING_PERMISSION_UNSECURE,
-                          ZMK_CUSTOM_SETTING_PERMISSION_UNSECURE, ZMK_CUSTOM_SETTING_NO_CONSTRAINT);
-#endif
 
 static int handle_get_state(const tokyo2006_cirque_GetStateRequest *req,
                             tokyo2006_cirque_Response *resp);
@@ -221,9 +215,8 @@ static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
         return first_rc;
     }
 
-    /* Persist if requested. Implementation lands in Task 12. */
+    /* Persist if requested. */
     if (persist) {
-        extern int cirque_settings_save_all(const struct device *dev);
         (void)cirque_settings_save_all(dev);
     }
 
@@ -271,7 +264,6 @@ static int handle_reset(const tokyo2006_cirque_ResetRequest *req,
 #endif
 
     if (req->factory_defaults) {
-        extern int cirque_settings_reset_all(const struct device *dev);
         (void)cirque_settings_reset_all(dev);
     }
 

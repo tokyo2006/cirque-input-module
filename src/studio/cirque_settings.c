@@ -573,6 +573,7 @@ static int cirque_settings_on_initialized(const zmk_event_t *eh) {
         return ZMK_EV_EVENT_HANDLED;
     }
     (void)cirque_settings_load_cb(dev);
+    (void)cirque_state_apply_all(dev);
     return ZMK_EV_EVENT_HANDLED;
 }
 
