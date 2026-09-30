@@ -43,6 +43,8 @@ static int handle_get_state(const tokyo2006_cirque_GetStateRequest *req,
                             tokyo2006_cirque_Response *resp);
 static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
                             tokyo2006_cirque_Response *resp);
+static int handle_reset(const tokyo2006_cirque_ResetRequest *req,
+                        tokyo2006_cirque_Response *resp);
 
 static bool cirque_rpc_handle_request(const zmk_custom_CallRequest *raw_request,
                                         pb_callback_t *encode_response) {
@@ -69,6 +71,9 @@ static bool cirque_rpc_handle_request(const zmk_custom_CallRequest *raw_request,
         break;
     case tokyo2006_cirque_Request_set_state_tag:
         rc = handle_set_state(&req.request_type.set_state, resp);
+        break;
+    case tokyo2006_cirque_Request_reset_tag:
+        rc = handle_reset(&req.request_type.reset, resp);
         break;
     default:
         LOG_WRN("Unsupported cirque request type: %d", req.which_request_type);
@@ -234,5 +239,33 @@ static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
     set_resp.state = resp->response_type.get_state.state;
     resp->which_response_type = tokyo2006_cirque_Response_set_state_tag;
     resp->response_type.set_state = set_resp;
+    return 0;
+}
+
+static int handle_reset(const tokyo2006_cirque_ResetRequest *req,
+                        tokyo2006_cirque_Response *resp) {
+    const struct device *dev = DEVICE_DT_GET_ANY(cirque_pinnacle2);
+    if (dev == NULL) {
+        tokyo2006_cirque_ErrorResponse err = tokyo2006_cirque_ErrorResponse_init_zero;
+        snprintf(err.message, sizeof(err.message), "No cirque,pinnacle2 device");
+        resp->which_response_type = tokyo2006_cirque_Response_error_tag;
+        resp->response_type.error = err;
+        return -ENODEV;
+    }
+
+    cirque_state_load_defaults(dev);
+
+    if (req->factory_defaults) {
+        extern int cirque_settings_reset_all(const struct device *dev);
+        (void)cirque_settings_reset_all(dev);
+    }
+
+    tokyo2006_cirque_GetStateRequest greq = tokyo2006_cirque_GetStateRequest_init_zero;
+    handle_get_state(&greq, resp);
+
+    tokyo2006_cirque_ResetResponse reset_resp = tokyo2006_cirque_ResetResponse_init_zero;
+    reset_resp.state = resp->response_type.get_state.state;
+    resp->which_response_type = tokyo2006_cirque_Response_reset_tag;
+    resp->response_type.reset = reset_resp;
     return 0;
 }

@@ -15,3 +15,8 @@ __attribute__((weak)) int cirque_settings_save_all(const struct device *dev) {
     ARG_UNUSED(dev);
     return 0;
 }
+
+__attribute__((weak)) int cirque_settings_reset_all(const struct device *dev) {
+    ARG_UNUSED(dev);
+    return 0;
+}
