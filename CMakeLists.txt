@@ -36,7 +36,6 @@ if(CONFIG_ZMK_CIRQUE_STUDIO_RPC)
   target_sources(app PRIVATE
     src/studio/cirque_handler.c
     src/studio/cirque_state.c
-    src/studio/cirque_state_stubs.c
   )
 
   list(APPEND CMAKE_MODULE_PATH ${ZEPHYR_BASE}/modules/nanopb)

@@ -15,6 +15,7 @@
 #include <zephyr/sys/util.h>
 
 #include <zmk/cirque_mode.h>
+#include <zmk/cirque_state.h>
 
 #include "input_pinnacle.h"
 
@@ -915,7 +916,6 @@ static void pinnacle_report_absolute_scroll(const struct device *dev, uint16_t p
 
 static void pinnacle_schedule_absolute_edge_motion(const struct device *dev)
 {
-	const struct pinnacle_config *config = dev->config;
 	struct pinnacle_data *drv_data = dev->data;
 	int32_t delta_x;
 	int32_t delta_y;
@@ -923,7 +923,7 @@ static void pinnacle_schedule_absolute_edge_motion(const struct device *dev)
 	int64_t delay_ms;
 
 	if (pinnacle_is_relative_mode(dev) || !drv_data->touching ||
-	    !config->absolute_edge_motion_enabled ||
+	    !cirque_state_get_edge_motion_enable(dev) ||
 	    !drv_data->absolute_motion_started ||
 	    drv_data->scroll_mode != PINNACLE_ABSOLUTE_SCROLL_NONE) {
 		k_work_cancel_delayable(&drv_data->edge_motion_work);
@@ -937,9 +937,9 @@ static void pinnacle_schedule_absolute_edge_motion(const struct device *dev)
 	}
 
 	elapsed_ms = k_uptime_get() - drv_data->touch_start_time_ms;
-	delay_ms = MAX(0, (int64_t)config->absolute_edge_motion_start_ms - elapsed_ms);
+	delay_ms = MAX(0, (int64_t)cirque_state_get_edge_motion_start_ms(dev) - elapsed_ms);
 	if (delay_ms == 0) {
-		delay_ms = config->absolute_edge_motion_interval_ms;
+		delay_ms = cirque_state_get_edge_motion_interval_ms(dev);
 	}
 
 	k_work_schedule(&drv_data->edge_motion_work, K_MSEC(delay_ms));
@@ -950,7 +950,6 @@ static void pinnacle_edge_motion_work_cb(struct k_work *work)
 	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
 	struct pinnacle_data *drv_data = CONTAINER_OF(dwork, struct pinnacle_data, edge_motion_work);
 	const struct device *dev = drv_data->dev;
-	const struct pinnacle_config *config = dev->config;
 	int32_t delta_x;
 	int32_t delta_y;
 
@@ -968,7 +967,7 @@ static void pinnacle_edge_motion_work_cb(struct k_work *work)
 	pinnacle_report_rel(dev, INPUT_REL_X, CLAMP(delta_x, INT16_MIN, INT16_MAX), false);
 	pinnacle_report_rel(dev, INPUT_REL_Y, CLAMP(delta_y, INT16_MIN, INT16_MAX), true);
 	k_work_reschedule(&drv_data->edge_motion_work,
-			  K_MSEC(config->absolute_edge_motion_interval_ms));
+			  K_MSEC(cirque_state_get_edge_motion_interval_ms(dev)));
 }
 
 static uint16_t pinnacle_absolute_tap_code(const struct device *dev, uint16_t x, uint16_t y)
@@ -1406,6 +1405,8 @@ int pinnacle_init_interrupt(const struct device *dev)
 	return 0;
 }
 
+static void pinnacle_load_runtime_state(const struct device *dev);
+
 static int pinnacle_init(const struct device *dev)
 {
 	const struct pinnacle_config *config = dev->config;
@@ -1466,7 +1467,67 @@ static int pinnacle_init(const struct device *dev)
 		return rc;
 	}
 
+	/* Seed the runtime state cache with compile-time DT defaults. Hot-path
+	 * functions will read from this cache via cirque_state_get_*() getters
+	 * instead of going back to dev->config. Setters (added in a later task)
+	 * will mutate the same struct, so behaviour-tunable fields no longer
+	 * require a reboot to take effect.
+	 */
+	pinnacle_load_runtime_state(dev);
+
 	return 0;
+}
+
+static void pinnacle_load_runtime_state(const struct device *dev)
+{
+	const struct pinnacle_config *config = dev->config;
+	struct cirque_runtime_state *rt = cirque_driver_get_state(dev);
+
+	/* Start from the same defaults cirque_state_load_defaults() would use,
+	 * so any field not explicitly mapped below has a sane value rather than
+	 * the zero-init from .bss.
+	 */
+	cirque_state_load_defaults(dev);
+
+	/* Axis transforms */
+	rt->invert_x  = config->invert_x;
+	rt->invert_y  = config->invert_y;
+	rt->swap_xy   = config->swap_xy;
+
+	/* Tap behaviour */
+	rt->primary_tap_enable = config->primary_tap_enabled;
+
+	/* Edge motion (consumed by pinnacle_schedule_absolute_edge_motion below) */
+	rt->edge_motion_enable      = config->absolute_edge_motion_enabled;
+	rt->edge_motion_start_ms    = config->absolute_edge_motion_start_ms;
+	rt->edge_motion_interval_ms = config->absolute_edge_motion_interval_ms;
+
+	/* Power */
+	rt->sleep_mode_enable = config->sleep_mode_enable;
+}
+
+/* Driver-side hooks consumed by src/studio/cirque_state.c.
+ * cirque_driver_get_state hands the runtime struct pointer back to the
+ * generic getter layer; cirque_driver_apply_all pushes new settings into the
+ * ASIC registers. For now it is a no-op: writes to the Pinnacle feed/config
+ * registers based on rt are added in follow-up tasks once a concrete
+ * register-programming helper exists.
+ */
+struct cirque_runtime_state *cirque_driver_get_state(const struct device *dev)
+{
+	struct pinnacle_data *drv_data = dev->data;
+
+	return &drv_data->rt;
+}
+
+void cirque_driver_apply_all(const struct device *dev)
+{
+	ARG_UNUSED(dev);
+	/* TODO: push rt fields into PINNACLE_REG_FEED_CONFIG1/2/3, the
+	 * extended-register tap/edge-motion/scroll blocks, and trigger a
+	 * feed reset so the new settings take effect. Driver-side application
+	 * of state to ASIC registers is added incrementally in follow-up tasks.
+	 */
 }
 
 #define PINNACLE_CONFIG_BUS_I2C(inst)                                                              \
