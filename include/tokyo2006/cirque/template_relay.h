@@ -6,7 +6,7 @@
  * Demonstrates the ZMK split event-relay: when the sample custom Studio RPC
  * arrives on the split *central*, the received value is forwarded to the
  * split *peripheral(s)* so peripheral-side code can react to it. The peripheral
- * decodes the struct and logs one line (see src/split/template_relay.c).
+ * decodes the struct and logs one line (see src/split/cirque_relay.c).
  *
  * The relay carries a plain, packed C struct -- NOT protobuf. ZMK's relay
  * (`ZMK_RELAY_EVENT_*`, <zmk/event_manager.h>) memcpy()s the whole event

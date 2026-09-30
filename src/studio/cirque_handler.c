@@ -84,9 +84,9 @@ static int handle_sample_request(const tokyo2006_cirque_SampleRequest *req,
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
     // Split-relay sample: forward the received value to the split
     // peripheral(s) over ZMK's split event-relay as a plain packed C struct
-    // (see src/split/template_relay.c). A no-op unless this build is a split
+    // (see src/split/cirque_relay.c). A no-op unless this build is a split
     // central with a connected peripheral.
-    template_relay_send_sample(req->value);
+    cirque_relay_send_sample(req->value);
 #endif
 
     tokyo2006_cirque_SampleResponse result = tokyo2006_cirque_SampleResponse_init_zero;
