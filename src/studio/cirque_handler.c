@@ -11,7 +11,7 @@
 #endif
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
-#include <tokyo2006/cirque/template_relay.h>
+#include <tokyo2006/cirque/cirque_relay.h>
 #endif
 
 #include <zephyr/logging/log.h>
@@ -227,6 +227,16 @@ static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
         (void)cirque_settings_save_all(dev);
     }
 
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
+    /*
+     * Notify the peripheral that central state changed. STUB (Task 14
+     * Option B): the carrier carries no payload yet. Future Option A
+     * replaces cirque_relay_send_sample(0) with cirque_relay_send_state(dev)
+     * which ships a nanopb-encoded CirqueState.
+     */
+    cirque_relay_send_sample(0);
+#endif
+
     /* Return current state */
     tokyo2006_cirque_SetStateResponse set_resp = tokyo2006_cirque_SetStateResponse_init_zero;
     set_resp.persisted = persist;
@@ -254,6 +264,11 @@ static int handle_reset(const tokyo2006_cirque_ResetRequest *req,
     }
 
     cirque_state_load_defaults(dev);
+
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
+    /* Notify peripheral of reset. STUB -- see handle_set_state. */
+    cirque_relay_send_sample(0);
+#endif
 
     if (req->factory_defaults) {
         extern int cirque_settings_reset_all(const struct device *dev);
