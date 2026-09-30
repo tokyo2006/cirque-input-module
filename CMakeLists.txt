@@ -1,3 +1,20 @@
+# Top-level CMakeLists.txt for the cirque-input-module.
+#
+# Wires three trees:
+#   - drivers/         Cirque Pinnacle input driver (gated on CONFIG_INPUT)
+#   - src/             Always-built runtime code (behaviors, events, processors)
+#                      + Studio RPC + split relay (gated on the relevant Kconfig
+#                      symbols).
+#
+# Symbols:
+#   - CONFIG_ZMK_CIRQUE            parent menuconfig; enables this module
+#   - CONFIG_ZMK_CIRQUE_STUDIO_RPC child of ZMK_CIRQUE; gates the Studio RPC
+#                                  subsystem in src/studio/ and the nanopb
+#                                  codegen for proto/tokyo2006/cirque/*.proto.
+#   - CONFIG_ZMK_SPLIT_RELAY_EVENT upstream ZMK flag; gates the split-relay
+#                                  helper in src/split/cirque_relay.c on both
+#                                  split halves.
+
 add_subdirectory(drivers)
 
 zephyr_include_directories(include)
@@ -11,3 +28,35 @@ target_sources(app PRIVATE
   src/input_processor_drag_scroll.c
   src/input_processor_pointer_speed.c
 )
+
+if(CONFIG_ZMK_CIRQUE_STUDIO_RPC)
+  # Studio RPC handler: src/studio/cirque_handler.c + nanopb codegen for
+  # proto/tokyo2006/cirque/*.proto. Generated headers land under
+  # ${CMAKE_CURRENT_BINARY_DIR}/proto and are exposed to `app` below.
+  target_sources(app PRIVATE src/studio/cirque_handler.c)
+
+  list(APPEND CMAKE_MODULE_PATH ${ZEPHYR_BASE}/modules/nanopb)
+  include(nanopb)
+  set(NANOPB_GENERATE_CPP_APPEND_PATH TRUE)
+  set(NANOPB_GENERATE_CPP_STANDALONE OFF)
+
+  # Adding nanopb output directly to the `app` target causes duplicate-symbol
+  # link issues, so we collect the generated proto sources into a private
+  # library and just expose the include path + a dependency to `app`.
+  zephyr_library()
+  file(GLOB_RECURSE PROTO_FILES ${CMAKE_CURRENT_SOURCE_DIR}/proto/*.proto)
+  nanopb_generate_cpp(proto_srcs proto_hdrs RELPATH ${CMAKE_CURRENT_SOURCE_DIR} ${PROTO_FILES})
+  target_include_directories(${ZEPHYR_CURRENT_LIBRARY} PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+  target_sources(${ZEPHYR_CURRENT_LIBRARY} PRIVATE ${proto_srcs} ${proto_hdrs})
+
+  target_include_directories(app PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/proto)
+  add_dependencies(app ${ZEPHYR_CURRENT_LIBRARY})
+endif()
+
+if(CONFIG_ZMK_SPLIT_RELAY_EVENT)
+  # Split-relay helper: compiled into both halves when split + relay events are
+  # enabled. The central uses cirque_relay_send_sample() from the Studio RPC
+  # handler; the peripheral receives the relayed carrier via the standard
+  # ZMK_RELAY_EVENT_HANDLE macro and logs it.
+  target_sources(app PRIVATE src/split/cirque_relay.c)
+endif()

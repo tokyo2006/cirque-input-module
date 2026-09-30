@@ -1,1 +1,5 @@
 rsource "drivers/Kconfig"
+rsource "src/behaviors/Kconfig"
+rsource "src/events/Kconfig"
+rsource "src/studio/Kconfig"
+rsource "src/split/Kconfig"
