@@ -29,6 +29,7 @@ EXCLUDED_PATHS = (
     "DESIGN.md",
     ".github/workflows/template-sync.yml",
     "web/src/proto/",  # generated
+    "docs/superpowers/",  # planning docs reference the template by name
 )
 
 # These hold the initialization instructions themselves. They are rewritten

@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: MIT
  *
  * Split-relay sample feature (template sample code) -- see
- * include/your-name/template/template_relay.h for the overview.
+ * include/tokyo2006/cirque/template_relay.h for the overview.
  *
  * This file is compiled into BOTH split roles (central and peripheral),
  * independently of the Studio RPC subsystem (only the central runs Studio).
@@ -12,13 +12,13 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 #include <zmk/event_manager.h>
-#include <your-name/template/template_relay.h>
+#include <tokyo2006/cirque/template_relay.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 /* Event implementation for the relay carrier struct. */
-ZMK_EVENT_IMPL(template_relay_sample);
+ZMK_EVENT_IMPL(cirque_relay_sample);
 
 /*
  * Wire the relay carrier central -> peripheral. The direction macros are
@@ -27,8 +27,8 @@ ZMK_EVENT_IMPL(template_relay_sample);
  * received -- a central never receives "Trs" (the peripheral never sends it),
  * so listing both here is safe on either role.
  */
-ZMK_RELAY_EVENT_CENTRAL_TO_PERIPHERAL(template_relay_sample, Trs, source)
-ZMK_RELAY_EVENT_HANDLE(template_relay_sample, Trs, source)
+ZMK_RELAY_EVENT_CENTRAL_TO_PERIPHERAL(cirque_relay_sample, Trs, source)
+ZMK_RELAY_EVENT_HANDLE(cirque_relay_sample, Trs, source)
 
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 
@@ -39,8 +39,8 @@ ZMK_RELAY_EVENT_HANDLE(template_relay_sample, Trs, source)
  * BLE test snapshot asserts. Keep this light: it runs on the split
  * relay-receive path (the system work queue).
  */
-static int template_relay_on_sample(const zmk_event_t *eh) {
-    const struct template_relay_sample *ev = as_template_relay_sample(eh);
+static int cirque_relay_on_sample(const zmk_event_t *eh) {
+    const struct cirque_relay_sample *ev = as_cirque_relay_sample(eh);
     if (ev == NULL) {
         return ZMK_EV_EVENT_BUBBLE;
     }
@@ -49,8 +49,8 @@ static int template_relay_on_sample(const zmk_event_t *eh) {
     return ZMK_EV_EVENT_HANDLED;
 }
 
-ZMK_LISTENER(template_relay_peripheral, template_relay_on_sample);
-ZMK_SUBSCRIPTION(template_relay_peripheral, template_relay_sample);
+ZMK_LISTENER(cirque_relay_peripheral, cirque_relay_on_sample);
+ZMK_SUBSCRIPTION(cirque_relay_peripheral, cirque_relay_sample);
 
 #endif // !CONFIG_ZMK_SPLIT_ROLE_CENTRAL
 
@@ -61,11 +61,11 @@ ZMK_SUBSCRIPTION(template_relay_peripheral, template_relay_sample);
  * the relay payload. Defined on both roles so the linker is happy regardless
  * of role, but in practice only the central (Studio RPC handler) calls it.
  */
-void template_relay_send_sample(int32_t value) {
-    struct template_relay_sample ev = {
+void cirque_relay_send_sample(int32_t value) {
+    struct cirque_relay_sample ev = {
         .source = ZMK_RELAY_EVENT_SOURCE_SELF,
         .version = TEMPLATE_RELAY_SAMPLE_VERSION,
         .value = value,
     };
-    raise_template_relay_sample(ev);
+    raise_cirque_relay_sample(ev);
 }

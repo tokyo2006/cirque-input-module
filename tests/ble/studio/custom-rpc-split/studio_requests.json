@@ -9,7 +9,7 @@
       "call": {
         "subsystemIndex": 0,
         "payload": {
-          "$type": "your_name.template.Request",
+          "$type": "tokyo2006.cirque.Request",
           "sample": { "value": 42 }
         }
       }

@@ -22,7 +22,7 @@
 #include <zephyr/kernel.h>
 #include <zmk/event_manager.h>
 
-/* Bump when the wire layout of struct template_relay_sample changes. */
+/* Bump when the wire layout of struct cirque_relay_sample changes. */
 #define TEMPLATE_RELAY_SAMPLE_VERSION 1
 
 /*
@@ -33,13 +33,13 @@
  * must fit CONFIG_ZMK_SPLIT_RELAY_EVENT_TYPE_NAME_LEN (default 4); the relay
  * macros BUILD_ASSERT both.
  */
-struct template_relay_sample {
+struct cirque_relay_sample {
     uint8_t source;
     uint8_t version;
     int32_t value;
 } __packed;
 
-ZMK_EVENT_DECLARE(template_relay_sample);
+ZMK_EVENT_DECLARE(cirque_relay_sample);
 
 /*
  * Central-side entry point, called from the Studio RPC handler when a
@@ -48,4 +48,4 @@ ZMK_EVENT_DECLARE(template_relay_sample);
  * ZMK's CONFIG_ZMK_SPLIT_RELAY_EVENT is enabled -- the sample has no Kconfig
  * of its own.
  */
-void template_relay_send_sample(int32_t value);
+void cirque_relay_send_sample(int32_t value);

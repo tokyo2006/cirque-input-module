@@ -52,7 +52,7 @@ except ImportError:  # pragma: no cover - convenience fallback for local dev
         raise
 
 
-SUBSYSTEM_IDENTIFIER = "your_name__template"
+SUBSYSTEM_IDENTIFIER = "tokyo2006__cirque"
 # This template registers exactly one custom subsystem, so its index is
 # deterministically 0.
 KNOWN_SUBSYSTEM_INDEX = 0
@@ -62,7 +62,7 @@ KNOWN_SUBSYSTEM_INDEX = 0
 INVALID_SUBSYSTEM_INDEX = 99
 
 SAMPLE_VALUE = 42
-# See handle_sample_request() in src/studio/template_handler.c.
+# See handle_sample_request() in src/studio/cirque_handler.c.
 EXPECTED_SAMPLE_RESPONSE = f"Hello from firmware! Received: {SAMPLE_VALUE}"
 
 # attach_dual_cdc_bridge's default bridge name -> monitor object prefix.
@@ -81,7 +81,7 @@ class RenodeWiredSplitModuleTests(unittest.TestCase):
 
     renode_path: str
     studio_pb2 = None
-    template_pb2 = None
+    cirque_pb2 = None
 
     @classmethod
     def setUpClass(cls):
@@ -130,16 +130,17 @@ class RenodeWiredSplitModuleTests(unittest.TestCase):
         studio_proto_dir = renode_harness.find_studio_proto_dir(REPO_ROOT)
         cls.studio_pb2 = renode_harness.load_studio_pb2(studio_proto_dir)
 
-        # This module's own proto (package your_name.template) -- protoc
-        # normalizes the hyphenated "your-name" path to the "your_name" package.
+        # This module's own proto (package tokyo2006.cirque) -- protoc
+        # normalizes the hyphenated "tokyo2006" namespace to the "tokyo2006"
+        # package.
         out_dir = renode_harness.compile_protos(
-            [REPO_ROOT / "proto" / "your-name" / "template" / "template.proto"],
+            [REPO_ROOT / "proto" / "tokyo2006" / "cirque" / "cirque.proto"],
             include_dirs=[REPO_ROOT / "proto"],
         )
         sys.path.insert(0, str(out_dir))
-        import your_name.template.template_pb2 as template_pb2  # type: ignore
+        import tokyo2006.cirque.cirque_pb2 as cirque_pb2  # type: ignore
 
-        cls.template_pb2 = template_pb2
+        cls.cirque_pb2 = cirque_pb2
 
         # Boot the pair and attach the DualCdcAcmBridge USB host to reach the
         # central's Studio CDC (the same steps run_usb_wired_smoke uses).
@@ -238,7 +239,7 @@ class RenodeWiredSplitModuleTests(unittest.TestCase):
         """Send this module's own SampleRequest to its registered subsystem
         (index 0) and assert the SampleResponse comes back over the central's
         USB CDC."""
-        inner_req = self.template_pb2.Request()
+        inner_req = self.cirque_pb2.Request()
         inner_req.sample.value = SAMPLE_VALUE
         self._send_call(KNOWN_SUBSYSTEM_INDEX, inner_req.SerializeToString(), request_id=1)
 
@@ -252,7 +253,7 @@ class RenodeWiredSplitModuleTests(unittest.TestCase):
         self.assertEqual(custom_resp.WhichOneof("response_type"), "call")
         self.assertEqual(custom_resp.call.subsystem_index, KNOWN_SUBSYSTEM_INDEX)
 
-        inner_resp = self.template_pb2.Response()
+        inner_resp = self.cirque_pb2.Response()
         inner_resp.ParseFromString(custom_resp.call.payload)
         self.assertEqual(inner_resp.WhichOneof("response_type"), "sample")
         self.assertEqual(inner_resp.sample.value, EXPECTED_SAMPLE_RESPONSE)
