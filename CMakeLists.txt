@@ -33,7 +33,11 @@ if(CONFIG_ZMK_CIRQUE_STUDIO_RPC)
   # Studio RPC handler: src/studio/cirque_handler.c + nanopb codegen for
   # proto/tokyo2006/cirque/*.proto. Generated headers land under
   # ${CMAKE_CURRENT_BINARY_DIR}/proto and are exposed to `app` below.
-  target_sources(app PRIVATE src/studio/cirque_handler.c)
+  target_sources(app PRIVATE
+    src/studio/cirque_handler.c
+    src/studio/cirque_state.c
+    src/studio/cirque_state_stubs.c
+  )
 
   list(APPEND CMAKE_MODULE_PATH ${ZEPHYR_BASE}/modules/nanopb)
   include(nanopb)
