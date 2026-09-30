@@ -4,8 +4,7 @@ import react from "@vitejs/plugin-react";
 // https://vite.dev/config/
 export default defineConfig({
   // The fallback base only matters for local dev/preview; CI sets VITE_BASE
-  // to /<repo>/. scripts/init_module.py rewrites this "zmk-cirque"
-  // token (like every other bare repo-name reference) to the real repo name.
-  base: process.env.VITE_BASE ?? "/zmk-cirque/",
+  // to /<repo>/. Default is the deployed GitHub Pages path for this repo.
+  base: process.env.VITE_BASE ?? "/cirque-input-module/",
   plugins: [react()],
 });

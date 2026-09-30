@@ -20,7 +20,7 @@ export const SUBSYSTEM_IDENTIFIER = "tokyo2006__cirque";
 // `...-with-custom-studio-rpc` repo name in a URL built from this constant --
 // the replacement targets this exact string first, which would otherwise
 // leave the owner unreplaced.
-export const GITHUB_REPO = "tokyo2006/zmk-cirque";
+export const GITHUB_REPO = "tokyo2006/cirque-input-module";
 
 // Unlike GITHUB_REPO above, this always credits the original template
 // project, regardless of which repo this module was forked into. The
@@ -33,7 +33,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🔧 zmk-cirque</h1>
+        <h1>Cirque Trackpad — DYA Studio</h1>
         <p>Custom Studio RPC Demo</p>
       </header>
 
@@ -108,7 +108,8 @@ function App() {
 
       <footer className="app-footer">
         <p>
-          <strong>zmk-cirque</strong> - Customize this for your ZMK module
+          <strong>Cirque Trackpad — DYA Studio</strong> — DYA Studio tab for the
+          cirque-input-module firmware
         </p>
         <p>
           <a

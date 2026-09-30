@@ -58,11 +58,8 @@ describe("App Component", () => {
     it("should render the application header", () => {
       render(<App />);
 
-      // Scoped to the heading role: the footer's "AI ready ZMK module
-      // template" credit line also matches a plain /zmk-cirque/i
-      // text query.
       expect(
-        screen.getByRole("heading", { name: /zmk-cirque/i })
+        screen.getByRole("heading", { name: /Cirque Trackpad/i })
       ).toBeInTheDocument();
       expect(screen.getByText(/Custom Studio RPC Demo/i)).toBeInTheDocument();
     });
@@ -70,19 +67,15 @@ describe("App Component", () => {
     it("should render footer with repo link", () => {
       render(<App />);
 
-      expect(screen.getByText(/zmk-cirque/i)).toBeInTheDocument();
-      // In the pristine template, GITHUB_REPO and TEMPLATE_CREDIT_REPO happen
-      // to share the same placeholder value -- scripts/init_module.py only
-      // rewrites the former (the latter is permanently exempted), so after
-      // initialization only one of these links still reads this text.
+      expect(screen.getByText(/Cirque Trackpad/i)).toBeInTheDocument();
       const links = screen.getAllByRole("link", {
-        name: "tokyo2006/zmk-cirque",
+        name: "tokyo2006/cirque-input-module",
       });
-      expect(links.length).toBe(2);
+      expect(links.length).toBe(1);
       for (const link of links) {
         expect(link).toHaveAttribute(
           "href",
-          "https://github.com/tokyo2006/zmk-cirque"
+          "https://github.com/tokyo2006/cirque-input-module"
         );
       }
     });

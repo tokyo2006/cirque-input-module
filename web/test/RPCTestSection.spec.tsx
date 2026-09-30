@@ -79,14 +79,12 @@ describe("RPCTestSection Component", () => {
         screen.getByText(/Subsystem "tokyo2006__cirque" not found/i)
       ).toBeInTheDocument();
       expect(
-        screen.getByText(
-          /Make sure your firmware includes the cirque module/i
-        )
+        screen.getByText(/Make sure your firmware includes the cirque module/i)
       ).toBeInTheDocument();
       const link = screen.getByRole("link", { name: /module README/i });
       expect(link).toHaveAttribute(
         "href",
-        "https://github.com/tokyo2006/zmk-cirque#readme"
+        "https://github.com/tokyo2006/cirque-input-module#readme"
       );
     });
   });
