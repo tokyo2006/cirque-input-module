@@ -42,7 +42,10 @@ if(CONFIG_ZMK_CIRQUE_STUDIO_RPC)
 
   # Adding nanopb output directly to the `app` target causes duplicate-symbol
   # link issues, so we collect the generated proto sources into a private
-  # library and just expose the include path + a dependency to `app`.
+  # library and link it into `app`. `add_dependencies` would only set build
+  # ordering, leaving proto + nanopb runtime symbols undefined at link time;
+  # `target_link_libraries` is required to actually pull the library's PRIVATE
+  # generated sources (and any transitive deps it carries) into `app`.
   zephyr_library()
   file(GLOB_RECURSE PROTO_FILES ${CMAKE_CURRENT_SOURCE_DIR}/proto/*.proto)
   nanopb_generate_cpp(proto_srcs proto_hdrs RELPATH ${CMAKE_CURRENT_SOURCE_DIR} ${PROTO_FILES})
@@ -50,7 +53,7 @@ if(CONFIG_ZMK_CIRQUE_STUDIO_RPC)
   target_sources(${ZEPHYR_CURRENT_LIBRARY} PRIVATE ${proto_srcs} ${proto_hdrs})
 
   target_include_directories(app PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/proto)
-  add_dependencies(app ${ZEPHYR_CURRENT_LIBRARY})
+  target_link_libraries(app PRIVATE ${ZEPHYR_CURRENT_LIBRARY})
 endif()
 
 if(CONFIG_ZMK_SPLIT_RELAY_EVENT)

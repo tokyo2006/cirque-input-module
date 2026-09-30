@@ -8,7 +8,11 @@
 #
 # Pinned revisions:
 #   - zmk / main+custom-studio-protocol is pinned to a specific SHA per
-#     design spec §17 risk mitigation. Re-evaluate on upgrades.
+#     design spec §16 risk mitigation. Re-evaluate on upgrades.
+#   - nanopb is pinned to a tagged release SHA per design spec §16 risk
+#     "nanopb generator version mismatch" -- an unpinned nanopb would silently
+#     drift when the upstream repo cuts a new release and could regenerate
+#     incompatible .pb.h/.pb.c for our proto files.
 #   - zephyr / v4.1.0+zmk-fixes+nrf-half-duplex-uart and
 #     zmk-feature-custom-settings / main remain on floating branches; their
 #     tags are stable in the cormoran ecosystem.
@@ -21,7 +25,7 @@ manifest:
   projects:
     - name: zmk
       remote: cormoran
-      # Pinned for stability per design spec §17 risk "main+custom-studio-protocol
+      # Pinned for stability per design spec §16 risk "main+custom-studio-protocol
       # branch rebases break our module". Current HEAD of the branch at the time
       # of pinning -- refresh on intentional upgrades.
       revision: 1fc72aaff7a42bd533c1f4c9b3f23c5317c745f4
@@ -53,5 +57,10 @@ manifest:
       remote: cormoran
       revision: main
       import: true
+    - name: nanopb
+      url: https://github.com/nanopb/nanopb.git
+      # Pinned to commit SHA for the nanopb-0.4.9.2 tag to fully insulate
+      # against upstream force-pushes of the tag. See comment block above.
+      revision: 160d4f09e5fabb2b66aa2dea32d4f38ace2c4b3f
   self:
     path: .
