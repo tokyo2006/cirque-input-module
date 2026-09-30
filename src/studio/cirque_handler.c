@@ -41,6 +41,8 @@ ZMK_CUSTOM_SETTING_DEFINE(cirque_sample_bool, "tokyo2006__cirque", "sample_bool"
 
 static int handle_get_state(const tokyo2006_cirque_GetStateRequest *req,
                             tokyo2006_cirque_Response *resp);
+static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
+                            tokyo2006_cirque_Response *resp);
 
 static bool cirque_rpc_handle_request(const zmk_custom_CallRequest *raw_request,
                                         pb_callback_t *encode_response) {
@@ -64,6 +66,9 @@ static bool cirque_rpc_handle_request(const zmk_custom_CallRequest *raw_request,
     switch (req.which_request_type) {
     case tokyo2006_cirque_Request_get_state_tag:
         rc = handle_get_state(&req.request_type.get_state, resp);
+        break;
+    case tokyo2006_cirque_Request_set_state_tag:
+        rc = handle_set_state(&req.request_type.set_state, resp);
         break;
     default:
         LOG_WRN("Unsupported cirque request type: %d", req.which_request_type);
@@ -133,5 +138,101 @@ static int handle_get_state(const tokyo2006_cirque_GetStateRequest *req,
     get_resp.state = state;
     resp->which_response_type = tokyo2006_cirque_Response_get_state_tag;
     resp->response_type.get_state = get_resp;
+    return 0;
+}
+
+static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
+                            tokyo2006_cirque_Response *resp) {
+    const struct device *dev = DEVICE_DT_GET_ANY(cirque_pinnacle2);
+    if (dev == NULL) {
+        tokyo2006_cirque_ErrorResponse err = tokyo2006_cirque_ErrorResponse_init_zero;
+        snprintf(err.message, sizeof(err.message), "No cirque,pinnacle2 device");
+        resp->which_response_type = tokyo2006_cirque_Response_error_tag;
+        resp->response_type.error = err;
+        return -ENODEV;
+    }
+
+    /* If persist=true, mark so settings subsystem can save later */
+    bool persist = req->persist;
+
+    /* Apply each field. We do NOT abort on first error — apply what we can
+     * and report the first failure in the response. This matches the
+     * template's permissive-update policy.
+     */
+    int first_rc = 0;
+    char first_err[128] = {0};
+
+#define APPLY(field, set_call)                                                  \
+    do {                                                                        \
+        int rc = set_call;                                                      \
+        if (rc != 0 && first_rc == 0) {                                         \
+            first_rc = rc;                                                      \
+            snprintf(first_err, sizeof(first_err), "%s failed (%d)", #field, rc); \
+        }                                                                       \
+    } while (0)
+
+    APPLY(data_mode,                cirque_state_set_data_mode(dev, req->state.data_mode));
+    APPLY(sensitivity,              cirque_state_set_sensitivity(dev, req->state.sensitivity));
+    APPLY(invert_x,                 cirque_state_set_invert_x(dev, req->state.invert_x));
+    APPLY(invert_y,                 cirque_state_set_invert_y(dev, req->state.invert_y));
+    APPLY(swap_xy,                  cirque_state_set_swap_xy(dev, req->state.swap_xy));
+    APPLY(rotate_degrees,           cirque_state_set_rotate_degrees(dev, req->state.rotate_degrees));
+    APPLY(primary_tap_enable,       cirque_state_set_primary_tap_enable(dev, req->state.primary_tap_enable));
+    APPLY(secondary_tap_enable,     cirque_state_set_secondary_tap_enable(dev, req->state.secondary_tap_enable));
+    APPLY(aux_tap_enable,           cirque_state_set_aux_tap_enable(dev, req->state.aux_tap_enable));
+    APPLY(tap_max_ms,               cirque_state_set_tap_max_ms(dev, req->state.tap_max_ms));
+    APPLY(tap_max_movement,         cirque_state_set_tap_max_movement(dev, req->state.tap_max_movement));
+    APPLY(tap_click_ms,             cirque_state_set_tap_click_ms(dev, req->state.tap_click_ms));
+    APPLY(tap_drag_enable,          cirque_state_set_tap_drag_enable(dev, req->state.tap_drag_enable));
+    APPLY(tap_drag_timeout_ms,      cirque_state_set_tap_drag_timeout_ms(dev, req->state.tap_drag_timeout_ms));
+    APPLY(tap_drag_max_movement,    cirque_state_set_tap_drag_max_movement(dev, req->state.tap_drag_max_movement));
+    APPLY(secondary_tap_area_width, cirque_state_set_secondary_tap_area_width(dev, req->state.secondary_tap_area_width));
+    APPLY(secondary_tap_area_height,cirque_state_set_secondary_tap_area_height(dev, req->state.secondary_tap_area_height));
+    APPLY(aux_tap_area_width,       cirque_state_set_aux_tap_area_width(dev, req->state.aux_tap_area_width));
+    APPLY(aux_tap_area_height,      cirque_state_set_aux_tap_area_height(dev, req->state.aux_tap_area_height));
+    APPLY(edge_motion_enable,       cirque_state_set_edge_motion_enable(dev, req->state.edge_motion_enable));
+    APPLY(edge_motion_zone,         cirque_state_set_edge_motion_zone(dev, req->state.edge_motion_zone));
+    APPLY(edge_motion_speed,        cirque_state_set_edge_motion_speed(dev, req->state.edge_motion_speed));
+    APPLY(edge_motion_interval_ms,  cirque_state_set_edge_motion_interval_ms(dev, req->state.edge_motion_interval_ms));
+    APPLY(edge_motion_start_ms,     cirque_state_set_edge_motion_start_ms(dev, req->state.edge_motion_start_ms));
+    APPLY(right_edge_scroll_enable, cirque_state_set_right_edge_scroll_enable(dev, req->state.right_edge_scroll_enable));
+    APPLY(top_edge_scroll_enable,   cirque_state_set_top_edge_scroll_enable(dev, req->state.top_edge_scroll_enable));
+    APPLY(scroll_zone,              cirque_state_set_scroll_zone(dev, req->state.scroll_zone));
+    APPLY(scroll_divisor,           cirque_state_set_scroll_divisor(dev, req->state.scroll_divisor));
+    APPLY(invert_scroll,            cirque_state_set_invert_scroll(dev, req->state.invert_scroll));
+    APPLY(relative_multiplier,      cirque_state_set_relative_multiplier(dev, req->state.relative_multiplier));
+    APPLY(relative_divisor,         cirque_state_set_relative_divisor(dev, req->state.relative_divisor));
+    APPLY(abs_relative_multiplier,  cirque_state_set_abs_relative_multiplier(dev, req->state.absolute_relative_multiplier));
+    APPLY(abs_relative_divisor,     cirque_state_set_abs_relative_divisor(dev, req->state.absolute_relative_divisor));
+    APPLY(sleep_mode_enable,        cirque_state_set_sleep_mode_enable(dev, req->state.sleep_mode_enable));
+
+#undef APPLY
+
+    if (first_rc != 0) {
+        tokyo2006_cirque_ErrorResponse err = tokyo2006_cirque_ErrorResponse_init_zero;
+        snprintf(err.message, sizeof(err.message), "%s", first_err);
+        resp->which_response_type = tokyo2006_cirque_Response_error_tag;
+        resp->response_type.error = err;
+        return first_rc;
+    }
+
+    /* Persist if requested. Implementation lands in Task 12. */
+    if (persist) {
+        extern int cirque_settings_save_all(const struct device *dev);
+        (void)cirque_settings_save_all(dev);
+    }
+
+    /* Return current state */
+    tokyo2006_cirque_SetStateResponse set_resp = tokyo2006_cirque_SetStateResponse_init_zero;
+    set_resp.persisted = persist;
+    /* Fill set_resp.state with the same logic as handle_get_state. To DRY,
+     * we synthesize a GetStateRequest and call handle_get_state directly:
+     */
+    tokyo2006_cirque_GetStateRequest greq = tokyo2006_cirque_GetStateRequest_init_zero;
+    handle_get_state(&greq, resp);
+    /* But we want set_resp, not get_state in response. Hack: re-extract. */
+    set_resp.state = resp->response_type.get_state.state;
+    resp->which_response_type = tokyo2006_cirque_Response_set_state_tag;
+    resp->response_type.set_state = set_resp;
     return 0;
 }
