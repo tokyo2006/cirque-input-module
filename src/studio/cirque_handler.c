@@ -70,7 +70,7 @@ static bool cirque_rpc_handle_request(const zmk_custom_CallRequest *raw_request,
         rc = -1;
     }
 
-    if (rc != 0) {
+    if (rc != 0 && resp->which_response_type != tokyo2006_cirque_Response_error_tag) {
         tokyo2006_cirque_ErrorResponse err = tokyo2006_cirque_ErrorResponse_init_zero;
         snprintf(err.message, sizeof(err.message), "Failed to process request");
         resp->which_response_type = tokyo2006_cirque_Response_error_tag;
