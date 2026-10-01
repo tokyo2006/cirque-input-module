@@ -175,50 +175,124 @@ static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
         }                                                                       \
     } while (0)
 
-    APPLY(data_mode,                cirque_state_set_data_mode(dev, req->state.data_mode));
-    APPLY(sensitivity,              cirque_state_set_sensitivity(dev, req->state.sensitivity));
-    APPLY(invert_x,                 cirque_state_set_invert_x(dev, req->state.invert_x));
-    APPLY(invert_y,                 cirque_state_set_invert_y(dev, req->state.invert_y));
-    APPLY(swap_xy,                  cirque_state_set_swap_xy(dev, req->state.swap_xy));
-    APPLY(rotate_degrees,           cirque_state_set_rotate_degrees(dev, req->state.rotate_degrees));
-    APPLY(primary_tap_enable,       cirque_state_set_primary_tap_enable(dev, req->state.primary_tap_enable));
-    APPLY(secondary_tap_enable,     cirque_state_set_secondary_tap_enable(dev, req->state.secondary_tap_enable));
-    APPLY(aux_tap_enable,           cirque_state_set_aux_tap_enable(dev, req->state.aux_tap_enable));
-    APPLY(tap_max_ms,               cirque_state_set_tap_max_ms(dev, req->state.tap_max_ms));
-    APPLY(tap_max_movement,         cirque_state_set_tap_max_movement(dev, req->state.tap_max_movement));
-    APPLY(tap_click_ms,             cirque_state_set_tap_click_ms(dev, req->state.tap_click_ms));
-    APPLY(tap_drag_enable,          cirque_state_set_tap_drag_enable(dev, req->state.tap_drag_enable));
-    APPLY(tap_drag_timeout_ms,      cirque_state_set_tap_drag_timeout_ms(dev, req->state.tap_drag_timeout_ms));
-    APPLY(tap_drag_max_movement,    cirque_state_set_tap_drag_max_movement(dev, req->state.tap_drag_max_movement));
-    APPLY(secondary_tap_area_width, cirque_state_set_secondary_tap_area_width(dev, req->state.secondary_tap_area_width));
-    APPLY(secondary_tap_area_height,cirque_state_set_secondary_tap_area_height(dev, req->state.secondary_tap_area_height));
-    APPLY(aux_tap_area_width,       cirque_state_set_aux_tap_area_width(dev, req->state.aux_tap_area_width));
-    APPLY(aux_tap_area_height,      cirque_state_set_aux_tap_area_height(dev, req->state.aux_tap_area_height));
-    APPLY(edge_motion_enable,       cirque_state_set_edge_motion_enable(dev, req->state.edge_motion_enable));
-    APPLY(edge_motion_zone,         cirque_state_set_edge_motion_zone(dev, req->state.edge_motion_zone));
-    APPLY(edge_motion_speed,        cirque_state_set_edge_motion_speed(dev, req->state.edge_motion_speed));
-    APPLY(edge_motion_interval_ms,  cirque_state_set_edge_motion_interval_ms(dev, req->state.edge_motion_interval_ms));
-    APPLY(edge_motion_start_ms,     cirque_state_set_edge_motion_start_ms(dev, req->state.edge_motion_start_ms));
-    APPLY(right_edge_scroll_enable, cirque_state_set_right_edge_scroll_enable(dev, req->state.right_edge_scroll_enable));
-    APPLY(top_edge_scroll_enable,   cirque_state_set_top_edge_scroll_enable(dev, req->state.top_edge_scroll_enable));
-    APPLY(scroll_zone,              cirque_state_set_scroll_zone(dev, req->state.scroll_zone));
-    APPLY(scroll_divisor,           cirque_state_set_scroll_divisor(dev, req->state.scroll_divisor));
-    APPLY(invert_scroll,            cirque_state_set_invert_scroll(dev, req->state.invert_scroll));
-    APPLY(relative_multiplier,      cirque_state_set_relative_multiplier(dev, req->state.relative_multiplier));
-    APPLY(relative_divisor,         cirque_state_set_relative_divisor(dev, req->state.relative_divisor));
-    APPLY(abs_relative_multiplier,  cirque_state_set_abs_relative_multiplier(dev, req->state.absolute_relative_multiplier));
-    APPLY(abs_relative_divisor,     cirque_state_set_abs_relative_divisor(dev, req->state.absolute_relative_divisor));
-    APPLY(sleep_mode_enable,        cirque_state_set_sleep_mode_enable(dev, req->state.sleep_mode_enable));
+    if (req->state.has_data_mode) {
+        APPLY(data_mode,            cirque_state_set_data_mode(dev, req->state.data_mode));
+    }
+    if (req->state.has_sensitivity) {
+        APPLY(sensitivity,          cirque_state_set_sensitivity(dev, req->state.sensitivity));
+    }
+    if (req->state.has_invert_x) {
+        APPLY(invert_x,             cirque_state_set_invert_x(dev, req->state.invert_x));
+    }
+    if (req->state.has_invert_y) {
+        APPLY(invert_y,             cirque_state_set_invert_y(dev, req->state.invert_y));
+    }
+    if (req->state.has_swap_xy) {
+        APPLY(swap_xy,              cirque_state_set_swap_xy(dev, req->state.swap_xy));
+    }
+    if (req->state.has_rotate_degrees) {
+        APPLY(rotate_degrees,       cirque_state_set_rotate_degrees(dev, req->state.rotate_degrees));
+    }
+    if (req->state.has_primary_tap_enable) {
+        APPLY(primary_tap_enable,   cirque_state_set_primary_tap_enable(dev, req->state.primary_tap_enable));
+    }
+    if (req->state.has_secondary_tap_enable) {
+        APPLY(secondary_tap_enable, cirque_state_set_secondary_tap_enable(dev, req->state.secondary_tap_enable));
+    }
+    if (req->state.has_aux_tap_enable) {
+        APPLY(aux_tap_enable,       cirque_state_set_aux_tap_enable(dev, req->state.aux_tap_enable));
+    }
+    if (req->state.has_tap_max_ms) {
+        APPLY(tap_max_ms,           cirque_state_set_tap_max_ms(dev, req->state.tap_max_ms));
+    }
+    if (req->state.has_tap_max_movement) {
+        APPLY(tap_max_movement,     cirque_state_set_tap_max_movement(dev, req->state.tap_max_movement));
+    }
+    if (req->state.has_tap_click_ms) {
+        APPLY(tap_click_ms,         cirque_state_set_tap_click_ms(dev, req->state.tap_click_ms));
+    }
+    if (req->state.has_tap_drag_enable) {
+        APPLY(tap_drag_enable,      cirque_state_set_tap_drag_enable(dev, req->state.tap_drag_enable));
+    }
+    if (req->state.has_tap_drag_timeout_ms) {
+        APPLY(tap_drag_timeout_ms,  cirque_state_set_tap_drag_timeout_ms(dev, req->state.tap_drag_timeout_ms));
+    }
+    if (req->state.has_tap_drag_max_movement) {
+        APPLY(tap_drag_max_movement, cirque_state_set_tap_drag_max_movement(dev, req->state.tap_drag_max_movement));
+    }
+    if (req->state.has_secondary_tap_area_width) {
+        APPLY(secondary_tap_area_width, cirque_state_set_secondary_tap_area_width(dev, req->state.secondary_tap_area_width));
+    }
+    if (req->state.has_secondary_tap_area_height) {
+        APPLY(secondary_tap_area_height, cirque_state_set_secondary_tap_area_height(dev, req->state.secondary_tap_area_height));
+    }
+    if (req->state.has_aux_tap_area_width) {
+        APPLY(aux_tap_area_width,   cirque_state_set_aux_tap_area_width(dev, req->state.aux_tap_area_width));
+    }
+    if (req->state.has_aux_tap_area_height) {
+        APPLY(aux_tap_area_height,  cirque_state_set_aux_tap_area_height(dev, req->state.aux_tap_area_height));
+    }
+    if (req->state.has_edge_motion_enable) {
+        APPLY(edge_motion_enable,   cirque_state_set_edge_motion_enable(dev, req->state.edge_motion_enable));
+    }
+    if (req->state.has_edge_motion_zone) {
+        APPLY(edge_motion_zone,     cirque_state_set_edge_motion_zone(dev, req->state.edge_motion_zone));
+    }
+    if (req->state.has_edge_motion_speed) {
+        APPLY(edge_motion_speed,    cirque_state_set_edge_motion_speed(dev, req->state.edge_motion_speed));
+    }
+    if (req->state.has_edge_motion_interval_ms) {
+        APPLY(edge_motion_interval_ms, cirque_state_set_edge_motion_interval_ms(dev, req->state.edge_motion_interval_ms));
+    }
+    if (req->state.has_edge_motion_start_ms) {
+        APPLY(edge_motion_start_ms, cirque_state_set_edge_motion_start_ms(dev, req->state.edge_motion_start_ms));
+    }
+    if (req->state.has_right_edge_scroll_enable) {
+        APPLY(right_edge_scroll_enable, cirque_state_set_right_edge_scroll_enable(dev, req->state.right_edge_scroll_enable));
+    }
+    if (req->state.has_top_edge_scroll_enable) {
+        APPLY(top_edge_scroll_enable, cirque_state_set_top_edge_scroll_enable(dev, req->state.top_edge_scroll_enable));
+    }
+    if (req->state.has_scroll_zone) {
+        APPLY(scroll_zone,          cirque_state_set_scroll_zone(dev, req->state.scroll_zone));
+    }
+    if (req->state.has_scroll_divisor) {
+        APPLY(scroll_divisor,       cirque_state_set_scroll_divisor(dev, req->state.scroll_divisor));
+    }
+    if (req->state.has_invert_scroll) {
+        APPLY(invert_scroll,        cirque_state_set_invert_scroll(dev, req->state.invert_scroll));
+    }
+    if (req->state.has_relative_multiplier) {
+        APPLY(relative_multiplier,  cirque_state_set_relative_multiplier(dev, req->state.relative_multiplier));
+    }
+    if (req->state.has_relative_divisor) {
+        APPLY(relative_divisor,     cirque_state_set_relative_divisor(dev, req->state.relative_divisor));
+    }
+    if (req->state.has_absolute_relative_multiplier) {
+        APPLY(abs_relative_multiplier, cirque_state_set_abs_relative_multiplier(dev, req->state.absolute_relative_multiplier));
+    }
+    if (req->state.has_absolute_relative_divisor) {
+        APPLY(abs_relative_divisor, cirque_state_set_abs_relative_divisor(dev, req->state.absolute_relative_divisor));
+    }
+    if (req->state.has_sleep_mode_enable) {
+        APPLY(sleep_mode_enable,    cirque_state_set_sleep_mode_enable(dev, req->state.sleep_mode_enable));
+    }
 
 #undef APPLY
 
     /* Mirror fields (not part of the 34 cirque runtime settings): apply
      * directly against their runtime APIs. */
-    zmk_drag_scroll_set_enabled(req->state.drag_scroll_enabled);
-    zmk_pointing_speed_set_position(ZMK_POINTING_SPEED_TARGET_POINTER,
-                                    (uint8_t)MIN(req->state.pointer_speed_position, 100));
-    zmk_pointing_speed_set_position(ZMK_POINTING_SPEED_TARGET_SCROLL,
-                                    (uint8_t)MIN(req->state.scroll_speed_position, 100));
+    if (req->state.has_drag_scroll_enabled) {
+        zmk_drag_scroll_set_enabled(req->state.drag_scroll_enabled);
+    }
+    if (req->state.has_pointer_speed_position) {
+        zmk_pointing_speed_set_position(ZMK_POINTING_SPEED_TARGET_POINTER,
+                                        (uint8_t)MIN(req->state.pointer_speed_position, 100));
+    }
+    if (req->state.has_scroll_speed_position) {
+        zmk_pointing_speed_set_position(ZMK_POINTING_SPEED_TARGET_SCROLL,
+                                        (uint8_t)MIN(req->state.scroll_speed_position, 100));
+    }
 
     if (first_rc != 0) {
         tokyo2006_cirque_ErrorResponse err = tokyo2006_cirque_ErrorResponse_init_zero;
