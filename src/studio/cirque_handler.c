@@ -221,13 +221,9 @@ static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
     }
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
-    /*
-     * Notify the peripheral that central state changed. STUB (Task 14
-     * Option B): the carrier carries no payload yet. Future Option A
-     * replaces cirque_relay_send_sample(0) with cirque_relay_send_state(dev)
-     * which ships a nanopb-encoded CirqueState.
-     */
-    cirque_relay_send_sample(0);
+    /* Notify the peripheral that central state changed, shipping the full
+     * runtime state so it stays in sync. */
+    cirque_relay_send_state(dev);
 #endif
 
     /* Return current state */
@@ -259,8 +255,8 @@ static int handle_reset(const tokyo2006_cirque_ResetRequest *req,
     cirque_state_load_defaults(dev);
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
-    /* Notify peripheral of reset. STUB -- see handle_set_state. */
-    cirque_relay_send_sample(0);
+    /* Notify peripheral of reset with the full reset state. */
+    cirque_relay_send_state(dev);
 #endif
 
     if (req->factory_defaults) {

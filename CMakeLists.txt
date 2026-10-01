@@ -29,13 +29,23 @@ target_sources(app PRIVATE
   src/input_processor_pointer_speed.c
 )
 
+# Runtime state get/set (src/studio/cirque_state.c). It is mutually dependent
+# on the driver: the driver calls cirque_state_get_*/load_defaults, and
+# cirque_state.c calls cirque_driver_get_state/apply_all. Both are therefore
+# compiled together whenever the driver is (CONFIG_INPUT_PINNACLE2). Compiling
+# cirque_state.c on BOTH split roles lets the peripheral apply relayed state
+# via cirque_state_set_*(). Its cirque_settings_load_cb dependency is gated
+# behind CONFIG_ZMK_CUSTOM_SETTINGS (central-only).
+if(CONFIG_INPUT_PINNACLE2)
+  target_sources(app PRIVATE src/studio/cirque_state.c)
+endif()
+
 if(CONFIG_ZMK_CIRQUE_STUDIO_RPC)
   # Studio RPC handler: src/studio/cirque_handler.c + nanopb codegen for
   # proto/tokyo2006/cirque/*.proto. Generated headers land under
   # ${CMAKE_CURRENT_BINARY_DIR}/proto and are exposed to `app` below.
   target_sources(app PRIVATE
     src/studio/cirque_handler.c
-    src/studio/cirque_state.c
     src/studio/cirque_settings.c
   )
 
@@ -62,8 +72,8 @@ endif()
 
 if(CONFIG_ZMK_SPLIT_RELAY_EVENT)
   # Split-relay helper: compiled into both halves when split + relay events are
-  # enabled. The central uses cirque_relay_send_sample() from the Studio RPC
+  # enabled. The central uses cirque_relay_send_state() from the Studio RPC
   # handler; the peripheral receives the relayed carrier via the standard
-  # ZMK_RELAY_EVENT_HANDLE macro and logs it.
+  # ZMK_RELAY_EVENT_HANDLE macro and applies it.
   target_sources(app PRIVATE src/split/cirque_relay.c)
 endif()
