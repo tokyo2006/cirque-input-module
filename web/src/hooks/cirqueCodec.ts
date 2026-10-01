@@ -112,10 +112,13 @@ function encodeCirqueState(state: CirqueState): number[] {
   const out: number[] = [];
   for (const field of STATE_FIELDS) {
     const value = state[field.name] as number;
+    // CirqueState fields are proto3 `optional`, so presence is meaningful on
+    // the device: `handle_set_state` only applies a field when its `has_<f>`
+    // bit is set. The web always sends full state, so encode every field
+    // explicitly (including zero/false) to preserve presence.
     if (field.kind === "bool") {
-      // proto3 default for bool is false; omit falsy values.
-      if (value) writeVarintField(out, field.num, 1);
-    } else if (value !== 0) {
+      writeVarintField(out, field.num, value ? 1 : 0);
+    } else {
       writeVarintField(out, field.num, value);
     }
   }
