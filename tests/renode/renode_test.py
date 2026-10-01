@@ -61,10 +61,6 @@ KNOWN_SUBSYSTEM_INDEX = 0
 # test_custom_rpc_invalid_index_dispatch).
 INVALID_SUBSYSTEM_INDEX = 99
 
-SAMPLE_VALUE = 42
-# See handle_sample_request() in src/studio/cirque_handler.c.
-EXPECTED_SAMPLE_RESPONSE = f"Hello from firmware! Received: {SAMPLE_VALUE}"
-
 # attach_dual_cdc_bridge's default bridge name -> monitor object prefix.
 BRIDGE_NAME = "bridge"
 
@@ -235,12 +231,12 @@ class RenodeWiredSplitModuleTests(unittest.TestCase):
 
     # -- The real thing: this module's own custom RPC, over USB --------------
 
-    def test_custom_rpc_sample_round_trip_over_usb(self):
-        """Send this module's own SampleRequest to its registered subsystem
-        (index 0) and assert the SampleResponse comes back over the central's
-        USB CDC."""
+    def test_custom_rpc_get_state_round_trip_over_usb(self):
+        """Send this module's own GetStateRequest to its registered subsystem
+        (index 0) and assert the GetStateResponse comes back over the central's
+        USB CDC, populated with the firmware runtime defaults."""
         inner_req = self.cirque_pb2.Request()
-        inner_req.sample.value = SAMPLE_VALUE
+        inner_req.get_state.SetInParent()
         self._send_call(KNOWN_SUBSYSTEM_INDEX, inner_req.SerializeToString(), request_id=1)
 
         resp = self._read_response()
@@ -255,8 +251,87 @@ class RenodeWiredSplitModuleTests(unittest.TestCase):
 
         inner_resp = self.cirque_pb2.Response()
         inner_resp.ParseFromString(custom_resp.call.payload)
-        self.assertEqual(inner_resp.WhichOneof("response_type"), "sample")
-        self.assertEqual(inner_resp.sample.value, EXPECTED_SAMPLE_RESPONSE)
+        self.assertEqual(inner_resp.WhichOneof("response_type"), "get_state")
+
+        # Defaults mirror include/zmk/cirque_state.h CIRQUE_*_DEFAULT.
+        state = inner_resp.get_state.state
+        self.assertEqual(state.data_mode, 0)  # DATA_MODE_ABSOLUTE
+        self.assertEqual(state.sensitivity, 0)  # SENSITIVITY_1X
+        self.assertEqual(state.invert_x, False)
+        self.assertEqual(state.invert_y, False)
+        self.assertEqual(state.swap_xy, False)
+        self.assertEqual(state.rotate_degrees, 0)
+        self.assertEqual(state.primary_tap_enable, True)
+        self.assertEqual(state.secondary_tap_enable, False)
+        self.assertEqual(state.aux_tap_enable, False)
+        self.assertEqual(state.tap_max_ms, 250)
+        self.assertEqual(state.tap_max_movement, 200)
+        self.assertEqual(state.tap_click_ms, 30)
+        self.assertEqual(state.tap_drag_enable, False)
+        self.assertEqual(state.tap_drag_timeout_ms, 350)
+        self.assertEqual(state.tap_drag_max_movement, 150)
+        self.assertEqual(state.secondary_tap_area_width, 0)
+        self.assertEqual(state.secondary_tap_area_height, 0)
+        self.assertEqual(state.aux_tap_area_width, 0)
+        self.assertEqual(state.aux_tap_area_height, 0)
+        self.assertEqual(state.edge_motion_enable, False)
+        self.assertEqual(state.edge_motion_zone, 100)
+        self.assertEqual(state.edge_motion_speed, 5)
+        self.assertEqual(state.edge_motion_interval_ms, 50)
+        self.assertEqual(state.edge_motion_start_ms, 300)
+        self.assertEqual(state.right_edge_scroll_enable, False)
+        self.assertEqual(state.top_edge_scroll_enable, False)
+        self.assertEqual(state.scroll_zone, 80)
+        self.assertEqual(state.scroll_divisor, 8)
+        self.assertEqual(state.invert_scroll, False)
+        self.assertEqual(state.relative_multiplier, 1)
+        self.assertEqual(state.relative_divisor, 1)
+        self.assertEqual(state.absolute_relative_multiplier, 1)
+        self.assertEqual(state.absolute_relative_divisor, 1)
+        self.assertEqual(state.sleep_mode_enable, True)
+
+    def test_custom_rpc_set_state_round_trip_over_usb(self):
+        """Set data_mode=relative and invert_x on, then confirm both the
+        SetStateResponse echo and a follow-up GetState reflect the change."""
+        inner_req = self.cirque_pb2.Request()
+        inner_req.set_state.state.data_mode = 1  # DATA_MODE_RELATIVE
+        inner_req.set_state.state.invert_x = True
+        # scroll_divisor rejects 0, so supply a valid value: the firmware
+        # applies the whole decoded CirqueState (proto3 scalars default to 0).
+        inner_req.set_state.state.scroll_divisor = 8
+        inner_req.set_state.persist = False
+        self._send_call(KNOWN_SUBSYSTEM_INDEX, inner_req.SerializeToString(), request_id=1)
+
+        resp = self._read_response()
+        self.assertEqual(resp.WhichOneof("type"), "request_response")
+        self.assertEqual(resp.request_response.request_id, 1)
+        self.assertEqual(resp.request_response.WhichOneof("subsystem"), "custom")
+
+        custom_resp = resp.request_response.custom
+        self.assertEqual(custom_resp.WhichOneof("response_type"), "call")
+        self.assertEqual(custom_resp.call.subsystem_index, KNOWN_SUBSYSTEM_INDEX)
+
+        inner_resp = self.cirque_pb2.Response()
+        inner_resp.ParseFromString(custom_resp.call.payload)
+        self.assertEqual(inner_resp.WhichOneof("response_type"), "set_state")
+        self.assertEqual(inner_resp.set_state.state.data_mode, 1)
+        self.assertEqual(inner_resp.set_state.state.invert_x, True)
+        self.assertEqual(inner_resp.set_state.persisted, False)
+
+        get_req = self.cirque_pb2.Request()
+        get_req.get_state.SetInParent()
+        self._send_call(KNOWN_SUBSYSTEM_INDEX, get_req.SerializeToString(), request_id=2)
+
+        resp = self._read_response()
+        self.assertEqual(resp.request_response.request_id, 2)
+        custom_resp = resp.request_response.custom
+        self.assertEqual(custom_resp.WhichOneof("response_type"), "call")
+
+        inner_resp = self.cirque_pb2.Response()
+        inner_resp.ParseFromString(custom_resp.call.payload)
+        self.assertEqual(inner_resp.WhichOneof("response_type"), "get_state")
+        self.assertEqual(inner_resp.get_state.state.data_mode, 1)
+        self.assertEqual(inner_resp.get_state.state.invert_x, True)
 
     # The module's split-relay sample (central forwarding the value to the
     # peripheral) is covered by the BabbleSim BLE test, not here: relay-over-wired
