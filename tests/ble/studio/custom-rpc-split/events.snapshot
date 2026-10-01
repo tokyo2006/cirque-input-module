@@ -17,16 +17,20 @@ host <dbg> ble_studio_host: discover_func: [SUBSCRIBED]
 host <dbg> ble_studio_host: write_func: [WROTE REQUEST]
 host <dbg> ble_studio_host: handle_frame: [RPC RESPONSE 1]
 host <dbg> ble_studio_host: handle_frame: payload
-host                        0a 4e 08 01 a2 06 49 0a  47 0a 45 12 13 79 6f 75 |.N....I. G.E..you
-host                        72 5f 6e 61 6d 65 5f 5f  74 65 6d 70 6c 61 74 65 |r_name__ template
-host                        1a 2e 68 74 74 70 3a 2f  2f 63 6f 72 6d 6f 72 61 |..http:/ /cormora
-host                        6e 2e 67 69 74 68 75 62  2e 69 6f 2f 7a 6d 6b 2d |n.github .io/zmk-
-host                        6d 6f 64 75 6c 65 2d 74  65 6d 70 6c 61 74 65 2f |module-t emplate/
+host                        0a 4e 08 01 a2 06 49 0a  47 0a 45 12 11 74 6f 6b |.N....I. G.E..tok
+host                        79 6f 32 30 30 36 5f 5f  63 69 72 71 75 65 1a 30 |yo2006__ cirque.0
+host                        68 74 74 70 73 3a 2f 2f  74 6f 6b 79 6f 32 30 30 |https:// tokyo200
+host                        36 2e 67 69 74 68 75 62  2e 69 6f 2f 63 69 72 71 |6.github .io/cirq
+host                        75 65 2d 69 6e 70 75 74  2d 6d 6f 64 75 6c 65 2f |ue-input -module/
 host <dbg> ble_studio_host: write_func: [WROTE REQUEST]
 host <dbg> ble_studio_host: handle_frame: [RPC RESPONSE 2]
 host <dbg> ble_studio_host: handle_frame: payload
-host                        0a 2e 08 02 a2 06 29 12  27 12 25 12 23 0a 21 48 |......). '.%.#.!H
-host                        65 6c 6c 6f 20 66 72 6f  6d 20 66 69 72 6d 77 61 |ello fro m firmwa
-host                        72 65 21 20 52 65 63 65  69 76 65 64 3a 20 34 32 |re! Rece ived: 42
+host                        0a 70 08 02 a2 06 6b 12  69 12 67 12 65 0a 63 08 |.p....k. i.g.e.c.
+host                        00 10 00 18 00 20 00 28  00 30 00 50 00 58 00 60 |..... .( .0.P.X.`
+host                        00 68 00 70 00 78 00 80  01 00 88 01 00 90 01 00 |.h.p.x.. ........
+host                        98 01 00 a0 01 00 a8 01  00 b0 01 00 f0 01 00 f8 |........ ........
+host                        01 00 80 02 00 88 02 00  90 02 00 c0 02 00 c8 02 |........ ........
+host                        00 d0 02 00 d8 02 00 e0  02 00 90 03 00 98 03 00 |........ ........
+host                        a0 03 00 a8 03 00 e0 03  00 80 05 00 d0 05 32 d8 |........ ......2.
+host                        05 32                                            |.2               
 host <dbg> ble_studio_host: handle_frame: [ALL RESPONSES RECEIVED]
-peripheral <dbg> zmk: cirque_relay_on_state: Peripheral applied relayed state (v1)

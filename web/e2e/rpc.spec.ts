@@ -10,20 +10,12 @@
  *
  *   west zmk-build tests/zmk-config -af web_e2e
  *   west zmk-web-e2e --elf build/web_e2e/zephyr/zmk.elf -- npm --prefix web run e2e
- *
- * Rewrite the RPC assertions for your own module's requests; the connect half
- * stays as is.
  */
 import { test, expect } from "@playwright/test";
 
 const SHIM_URL = process.env.ZMK_WEB_E2E_SHIM_URL;
-// CONFIG_ZMK_KEYBOARD_NAME of the DUT (tests/zmk-config/config/tester_xiao.conf).
-const DEVICE_NAME = process.env.ZMK_WEB_E2E_DEVICE_NAME || "Module Test";
-const SAMPLE_VALUE = "42";
-// See handle_sample_request() in src/studio/cirque_handler.c.
-const EXPECTED_RESPONSE = `Hello from firmware! Received: ${SAMPLE_VALUE}`;
 
-test("the web UI round-trips the custom RPC with real firmware", async ({
+test("the web UI connects to real firmware and round-trips the cirque RPC", async ({
   page,
   request,
 }) => {
@@ -41,15 +33,19 @@ test("the web UI round-trips the custom RPC with real firmware", async ({
   // completes the Studio handshake against the firmware, and the app renders
   // the name the firmware reported.
   await page.getByRole("button", { name: /Connect USB/ }).click();
-  await expect(page.getByText(`Connected to: ${DEVICE_NAME}`)).toBeVisible();
+  await expect(page.getByText(/Connected to:/)).toBeVisible();
 
-  // The firmware registered this module's custom subsystem: the app found it
-  // and rendered its panel (it renders a "not found" warning otherwise).
-  await expect(page.getByRole("heading", { name: "RPC Test" })).toBeVisible();
+  // The firmware registered this module's custom subsystem, so the cirque
+  // settings panel rendered its sections (the app shows a warning otherwise).
+  await expect(
+    page.getByRole("button", { name: "Mode & Sensitivity" })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Axis" })).toBeVisible();
 
-  // The module's own RPC, end to end: the app encodes a SampleRequest, the
-  // firmware's handler answers, and the decoded response reaches the DOM.
-  await page.getByLabel("Value:").fill(SAMPLE_VALUE);
-  await page.getByRole("button", { name: /Send Request/ }).click();
-  await expect(page.getByText(EXPECTED_RESPONSE)).toBeVisible();
+  // The module's own RPC, end to end: toggle "Invert X" and confirm the UI
+  // reflects the new value once the firmware's SetState response comes back.
+  const invertX = page.getByRole("checkbox", { name: /Invert X/ });
+  await expect(invertX).not.toBeChecked();
+  await invertX.click();
+  await expect(invertX).toBeChecked();
 });

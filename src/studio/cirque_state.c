@@ -28,10 +28,17 @@ extern struct cirque_runtime_state *cirque_driver_get_state(const struct device 
     __attribute__((weak));
 extern void cirque_driver_apply_all(const struct device *dev) __attribute__((weak));
 
+static void cirque_state_apply_defaults(struct cirque_runtime_state *s);
+
 static struct cirque_runtime_state cirque_fallback_state;
+static bool cirque_fallback_initialized;
 
 struct cirque_runtime_state *cirque_state_get_struct(const struct device *dev) {
     if (dev == NULL || cirque_driver_get_state == NULL) {
+        if (!cirque_fallback_initialized) {
+            cirque_fallback_initialized = true;
+            cirque_state_apply_defaults(&cirque_fallback_state);
+        }
         return &cirque_fallback_state;
     }
     return cirque_driver_get_state(dev);
@@ -137,7 +144,14 @@ DEFINE_SETTER(uint16_t, abs_relative_divisor,      absolute_relative_divisor,   
 DEFINE_SETTER(bool,     sleep_mode_enable,         sleep_mode_enable,         validate_bool_any)
 
 int cirque_state_load_defaults(const struct device *dev) {
-    struct cirque_runtime_state *s = rt(dev);
+    cirque_state_apply_defaults(cirque_state_get_struct(dev));
+    return 0;
+}
+
+/* Assign every field its compile-time default. Shared by
+ * cirque_state_load_defaults() and the lazy initialisation of the static
+ * fallback state used when no trackpad device is present. */
+static void cirque_state_apply_defaults(struct cirque_runtime_state *s) {
     s->data_mode                   = CIRQUE_DATA_MODE_DEFAULT;
     s->sensitivity                 = CIRQUE_SENSITIVITY_DEFAULT;
     s->invert_x                    = CIRQUE_INVERT_X_DEFAULT;
@@ -172,7 +186,6 @@ int cirque_state_load_defaults(const struct device *dev) {
     s->absolute_relative_multiplier= CIRQUE_ABS_RELATIVE_MULTIPLIER_DEFAULT;
     s->absolute_relative_divisor   = CIRQUE_ABS_RELATIVE_DIVISOR_DEFAULT;
     s->sleep_mode_enable           = CIRQUE_SLEEP_MODE_ENABLE_DEFAULT;
-    return 0;
 }
 
 int cirque_state_load_from_dt(const struct device *dev) {
