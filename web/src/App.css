@@ -75,3 +75,102 @@
   font-size: 0.85rem;
   color: #666;
 }
+
+.cirque-studio {
+  margin-bottom: 1.5rem;
+}
+
+.studio-header {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.connect-prompt,
+.loading {
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  color: #666;
+}
+
+.error {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid #c0392b;
+  border-radius: 4px;
+  background: #fdecea;
+  color: #c0392b;
+}
+
+.section-card {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.section-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: #f4f4f4;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.section-card__title {
+  text-align: left;
+}
+
+.section-card__toggle {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.section-card__body {
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.slider label,
+.switch label,
+.number-stepper label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.slider input[type="range"] {
+  width: 100%;
+  margin-top: 0.35rem;
+}
+
+.slider {
+  display: flex;
+  flex-direction: column;
+}
+
+.switch label {
+  cursor: pointer;
+}
+
+.number-stepper__controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.number-stepper__controls button {
+  width: 2rem;
+  height: 2rem;
+  cursor: pointer;
+}

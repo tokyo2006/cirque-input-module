@@ -1,19 +1,17 @@
-import { useContext, useEffect, useState } from "react";
 import "./App.css";
 import { connect as gattConnect } from "@zmkfirmware/zmk-studio-ts-client/transport/gatt";
 import {
   ZMKConnection,
-  ZMKAppContext,
-  useStudioLockState,
-  isUnlockRequiredError,
   isWebSerialSupported,
   isWebBluetoothSupported,
-  useCustomSubsystem,
   connectSerial,
 } from "@cormoran/zmk-studio-react-hook";
-import { Request, Response } from "./proto/tokyo2006/cirque/cirque";
-
-export const SUBSYSTEM_IDENTIFIER = "tokyo2006__cirque";
+import { useCirqueState } from "./hooks/useCirqueState";
+import { SectionCard } from "./components/SectionCard";
+import { Slider } from "./components/Slider";
+import { Switch } from "./components/Switch";
+import { NumberStepper } from "./components/NumberStepper";
+import { DataMode, Sensitivity } from "./hooks/cirqueTypes";
 
 // Template placeholder: `scripts/init_module.py` rewrites this literal to
 // `{owner}/{repo}`. Never write the full
@@ -101,7 +99,7 @@ function App() {
               </button>
             </section>
 
-            <RPCTestSection />
+            <StudioSection />
           </>
         )}
       />
@@ -143,132 +141,350 @@ function App() {
   );
 }
 
-export function RPCTestSection() {
-  const zmkApp = useContext(ZMKAppContext);
-  const { ready, subsystem, call } = useCustomSubsystem(SUBSYSTEM_IDENTIFIER, {
-    encode: (r: Request) => Request.encode(r).finish(),
-    decode: Response.decode,
-  });
-  const { locked } = useStudioLockState();
-  const [inputValue, setInputValue] = useState<number>(42);
-  const [response, setResponse] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [awaitingUnlock, setAwaitingUnlock] = useState(false);
+/**
+ * The 8-section settings editor. It is the SINGLE owner of `useCirqueState()`
+ * state: it calls the hook once and prop-drills `value`/`onChange` down to the
+ * leaf components, so every control reads/writes the same device state instead
+ * of each firing its own `getState` (which would never propagate between
+ * siblings).
+ */
+export function StudioSection() {
+  const { state, isConnected, isLoading, error, setField, reset, refresh } =
+    useCirqueState();
 
-  const sendSampleRequest = async () => {
-    if (!ready) return;
-
-    setIsLoading(true);
-    setResponse(null);
-
-    try {
-      const resp = await call({ sample: { value: inputValue } });
-      setAwaitingUnlock(false);
-      console.log("Decoded response:", resp);
-
-      if (resp?.sample) {
-        setResponse(resp.sample.value);
-      } else if (resp?.error) {
-        setResponse(`Error: ${resp.error.message}`);
-      }
-    } catch (error) {
-      if (isUnlockRequiredError(error)) {
-        setAwaitingUnlock(true);
-      } else {
-        console.error("RPC call failed:", error);
-        setResponse(
-          `Failed: ${error instanceof Error ? error.message : "Unknown error"}`
-        );
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Auto-retry once the device reports it's unlocked again -- covers the
-  // common case where the user presses &studio_unlock after seeing the
-  // prompt below without needing to click "Retry" themselves.
-  useEffect(() => {
-    if (awaitingUnlock && !locked) {
-      // This mirrors an external system (the device's lock state) rather
-      // than deriving from props/state, so a direct setState here is
-      // intentional -- see react-hooks/set-state-in-effect's rationale (same
-      // pattern used by useStudioLockState itself).
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAwaitingUnlock(false);
-      void sendSampleRequest();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locked]);
-
-  if (!zmkApp) return null;
-
-  if (!subsystem) {
+  if (!isConnected) {
     return (
-      <section className="card">
-        <div className="warning-message">
-          <p>
-            ⚠️ Subsystem "{SUBSYSTEM_IDENTIFIER}" not found. Make sure your
-            firmware includes the cirque module. See the{" "}
-            <a href={`https://github.com/${GITHUB_REPO}#readme`}>
-              module README
-            </a>{" "}
-            for firmware setup.
-          </p>
-        </div>
-      </section>
+      <div className="connect-prompt">
+        Connect via DYA Studio to edit settings.
+      </div>
     );
   }
 
-  return (
-    <section className="card">
-      <h2>RPC Test</h2>
-      <p>Send a sample request to the firmware:</p>
-
-      {locked && (
-        <div className="locked-banner">
-          <p>🔒 ZMK Studio is locked.</p>
+  if (!state) {
+    return (
+      <div className="cirque-studio">
+        <div className="loading">
+          {isLoading ? "Loading…" : "No state received"}
         </div>
-      )}
+        {error && (
+          <div className="error" role="alert">
+            {error}
+          </div>
+        )}
+      </div>
+    );
+  }
 
-      <div className="input-group">
-        <label htmlFor="value-input">Value:</label>
-        <input
-          id="value-input"
-          type="number"
-          value={inputValue}
-          onChange={(e) => setInputValue(parseInt(e.target.value) || 0)}
-        />
+  const set = setField;
+
+  return (
+    <div className="cirque-studio">
+      <div className="studio-header">
+        <button className="btn btn-secondary" onClick={() => void reset(true)}>
+          Reset to defaults
+        </button>
+        <button className="btn btn-secondary" onClick={() => void refresh()}>
+          Refresh
+        </button>
       </div>
 
-      <button
-        className="btn btn-primary"
-        disabled={isLoading || locked}
-        onClick={sendSampleRequest}
-      >
-        {isLoading ? "⏳ Sending..." : "📤 Send Request"}
-      </button>
-
-      {awaitingUnlock && (
-        <div className="unlock-prompt card">
-          <p>
-            🔒 ZMK Studio is locked. Press the unlock key (
-            <code>&amp;studio_unlock</code> behavior) on your keyboard — the
-            request will retry automatically.
-          </p>
-          <button className="btn btn-secondary" onClick={sendSampleRequest}>
-            Retry
-          </button>
+      {error && (
+        <div className="error" role="alert">
+          {error}
         </div>
       )}
 
-      {response && (
-        <div className="response-box">
-          <h3>Response from Firmware:</h3>
-          <pre>{response}</pre>
-        </div>
-      )}
-    </section>
+      <SectionCard title="Mode & Sensitivity">
+        <Switch
+          label="Relative mode"
+          value={state.dataMode === DataMode.DATA_MODE_RELATIVE}
+          onChange={(v) =>
+            void set(
+              "dataMode",
+              v ? DataMode.DATA_MODE_RELATIVE : DataMode.DATA_MODE_ABSOLUTE,
+              true
+            )
+          }
+        />
+        <Switch
+          label="2x sensitivity"
+          value={state.sensitivity === Sensitivity.SENSITIVITY_2X}
+          onChange={(v) =>
+            void set(
+              "sensitivity",
+              v ? Sensitivity.SENSITIVITY_2X : Sensitivity.SENSITIVITY_1X,
+              true
+            )
+          }
+        />
+      </SectionCard>
+
+      <SectionCard title="Axis">
+        <Switch
+          label="Invert X"
+          value={state.invertX}
+          onChange={(v) => void set("invertX", v, true)}
+        />
+        <Switch
+          label="Invert Y"
+          value={state.invertY}
+          onChange={(v) => void set("invertY", v, true)}
+        />
+        <Switch
+          label="Swap X/Y"
+          value={state.swapXy}
+          onChange={(v) => void set("swapXy", v, true)}
+        />
+        <NumberStepper
+          label="Rotation"
+          value={state.rotateDegrees}
+          values={[0, 90, 180, 270]}
+          unit="°"
+          onChange={(v) => void set("rotateDegrees", v, true)}
+        />
+      </SectionCard>
+
+      <SectionCard title="Tap">
+        <Switch
+          label="Primary tap"
+          value={state.primaryTapEnable}
+          onChange={(v) => void set("primaryTapEnable", v, true)}
+        />
+        <Switch
+          label="Secondary tap (lower-right zone)"
+          value={state.secondaryTapEnable}
+          onChange={(v) => void set("secondaryTapEnable", v, true)}
+        />
+        <Switch
+          label="Aux tap (upper-left zone)"
+          value={state.auxTapEnable}
+          onChange={(v) => void set("auxTapEnable", v, true)}
+        />
+        <Switch
+          label="Tap-drag"
+          value={state.tapDragEnable}
+          onChange={(v) => void set("tapDragEnable", v, true)}
+        />
+        <Slider
+          label="Tap timeout"
+          value={state.tapMaxMs}
+          min={50}
+          max={1000}
+          step={10}
+          unit=" ms"
+          onChange={(v) => void set("tapMaxMs", v, true)}
+        />
+        <Slider
+          label="Tap max movement"
+          value={state.tapMaxMovement}
+          min={10}
+          max={500}
+          step={10}
+          onChange={(v) => void set("tapMaxMovement", v, true)}
+        />
+        <Slider
+          label="Tap click hold"
+          value={state.tapClickMs}
+          min={5}
+          max={200}
+          step={5}
+          unit=" ms"
+          onChange={(v) => void set("tapClickMs", v, true)}
+        />
+        <Slider
+          label="Drag timeout"
+          value={state.tapDragTimeoutMs}
+          min={50}
+          max={1000}
+          step={10}
+          unit=" ms"
+          onChange={(v) => void set("tapDragTimeoutMs", v, true)}
+        />
+        <Slider
+          label="Drag max movement"
+          value={state.tapDragMaxMovement}
+          min={10}
+          max={500}
+          step={10}
+          onChange={(v) => void set("tapDragMaxMovement", v, true)}
+        />
+        <Slider
+          label="Secondary zone width"
+          value={state.secondaryTapAreaWidth}
+          min={0}
+          max={500}
+          step={10}
+          onChange={(v) => void set("secondaryTapAreaWidth", v, true)}
+        />
+        <Slider
+          label="Secondary zone height"
+          value={state.secondaryTapAreaHeight}
+          min={0}
+          max={500}
+          step={10}
+          onChange={(v) => void set("secondaryTapAreaHeight", v, true)}
+        />
+        <Slider
+          label="Aux zone width"
+          value={state.auxTapAreaWidth}
+          min={0}
+          max={500}
+          step={10}
+          onChange={(v) => void set("auxTapAreaWidth", v, true)}
+        />
+        <Slider
+          label="Aux zone height"
+          value={state.auxTapAreaHeight}
+          min={0}
+          max={500}
+          step={10}
+          onChange={(v) => void set("auxTapAreaHeight", v, true)}
+        />
+      </SectionCard>
+
+      <SectionCard title="Edge Motion">
+        <Switch
+          label="Enable edge motion"
+          value={state.edgeMotionEnable}
+          onChange={(v) => void set("edgeMotionEnable", v, true)}
+        />
+        <Slider
+          label="Zone size"
+          value={state.edgeMotionZone}
+          min={20}
+          max={300}
+          step={5}
+          onChange={(v) => void set("edgeMotionZone", v, true)}
+        />
+        <Slider
+          label="Speed"
+          value={state.edgeMotionSpeed}
+          min={1}
+          max={20}
+          step={1}
+          onChange={(v) => void set("edgeMotionSpeed", v, true)}
+        />
+        <Slider
+          label="Interval"
+          value={state.edgeMotionIntervalMs}
+          min={10}
+          max={200}
+          step={5}
+          unit=" ms"
+          onChange={(v) => void set("edgeMotionIntervalMs", v, true)}
+        />
+        <Slider
+          label="Start delay"
+          value={state.edgeMotionStartMs}
+          min={50}
+          max={1000}
+          step={10}
+          unit=" ms"
+          onChange={(v) => void set("edgeMotionStartMs", v, true)}
+        />
+      </SectionCard>
+
+      <SectionCard title="Edge Scroll">
+        <Switch
+          label="Right edge → vertical scroll"
+          value={state.rightEdgeScrollEnable}
+          onChange={(v) => void set("rightEdgeScrollEnable", v, true)}
+        />
+        <Switch
+          label="Top edge → horizontal scroll"
+          value={state.topEdgeScrollEnable}
+          onChange={(v) => void set("topEdgeScrollEnable", v, true)}
+        />
+        <Switch
+          label="Invert scroll"
+          value={state.invertScroll}
+          onChange={(v) => void set("invertScroll", v, true)}
+        />
+        <Slider
+          label="Scroll zone size"
+          value={state.scrollZone}
+          min={20}
+          max={300}
+          step={5}
+          onChange={(v) => void set("scrollZone", v, true)}
+        />
+        <Slider
+          label="Scroll divisor"
+          value={state.scrollDivisor}
+          min={1}
+          max={64}
+          step={1}
+          onChange={(v) => void set("scrollDivisor", v, true)}
+        />
+      </SectionCard>
+
+      <SectionCard title="Pointer">
+        <Slider
+          label="Relative multiplier"
+          value={state.relativeMultiplier}
+          min={1}
+          max={20}
+          step={1}
+          onChange={(v) => void set("relativeMultiplier", v, true)}
+        />
+        <Slider
+          label="Relative divisor"
+          value={state.relativeDivisor}
+          min={1}
+          max={20}
+          step={1}
+          onChange={(v) => void set("relativeDivisor", v, true)}
+        />
+        <Slider
+          label="Absolute multiplier"
+          value={state.absoluteRelativeMultiplier}
+          min={1}
+          max={20}
+          step={1}
+          onChange={(v) => void set("absoluteRelativeMultiplier", v, true)}
+        />
+        <Slider
+          label="Absolute divisor"
+          value={state.absoluteRelativeDivisor}
+          min={1}
+          max={20}
+          step={1}
+          onChange={(v) => void set("absoluteRelativeDivisor", v, true)}
+        />
+      </SectionCard>
+
+      <SectionCard title="Speed">
+        <Slider
+          label="Pointer speed position"
+          value={state.pointerSpeedPosition}
+          min={0}
+          max={100}
+          step={1}
+          onChange={(v) => void set("pointerSpeedPosition", v, true)}
+        />
+        <Slider
+          label="Scroll speed position"
+          value={state.scrollSpeedPosition}
+          min={0}
+          max={100}
+          step={1}
+          onChange={(v) => void set("scrollSpeedPosition", v, true)}
+        />
+      </SectionCard>
+
+      <SectionCard title="Misc">
+        <Switch
+          label="Enable sleep mode"
+          value={state.sleepModeEnable}
+          onChange={(v) => void set("sleepModeEnable", v, true)}
+        />
+        <Switch
+          label="Enable drag-scroll"
+          value={state.dragScrollEnabled}
+          onChange={(v) => void set("dragScrollEnabled", v, true)}
+        />
+      </SectionCard>
+    </div>
   );
 }
 

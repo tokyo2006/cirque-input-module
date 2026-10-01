@@ -83,7 +83,7 @@ message Request {
     }
 }
 
-message ErrorResponse { string message = 1 [(nanopb).max_size = 128]; }
+message ErrorResponse { string message = 1; }
 
 message Response {
     oneof response_type {

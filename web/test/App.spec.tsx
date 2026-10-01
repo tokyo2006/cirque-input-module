@@ -67,7 +67,7 @@ describe("App Component", () => {
     it("should render footer with repo link", () => {
       render(<App />);
 
-      expect(screen.getByText(/Cirque Trackpad/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Cirque Trackpad/i).length).toBeGreaterThan(0);
       const links = screen.getAllByRole("link", {
         name: "tokyo2006/cirque-input-module",
       });
@@ -150,6 +150,12 @@ describe("App Component", () => {
         subsystems: ["tokyo2006__cirque"],
       });
 
+      // Queue a getState response so StudioSection's initial fetch resolves
+      // and renders the settings sections. Field 2 (get_state), empty state.
+      mocks.call_rpc.mockResolvedValueOnce({
+        custom: { call: { payload: new Uint8Array([0x12, 0x00]) } },
+      });
+
       const { connectSerial } = await import("@cormoran/zmk-studio-react-hook");
       (connectSerial as jest.Mock).mockResolvedValue(mocks.mockTransport);
 
@@ -165,7 +171,9 @@ describe("App Component", () => {
       });
 
       expect(screen.getByText(/Disconnect/i)).toBeInTheDocument();
-      expect(screen.getByText(/RPC Test/i)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText(/Mode & Sensitivity/i)).toBeInTheDocument();
+      });
     });
 
     it("should connect to device via Bluetooth when connect button is clicked", async () => {

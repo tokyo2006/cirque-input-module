@@ -1,14 +1,9 @@
 import { useEffect, useState } from "react";
-import { useCirqueState } from "../hooks/useCirqueState";
-import type { CirqueState } from "../hooks/cirqueTypes";
-
-type NumericField = {
-  [K in keyof CirqueState]: CirqueState[K] extends number ? K : never;
-}[keyof CirqueState];
 
 interface SliderProps {
-  field: NumericField;
   label: string;
+  value: number;
+  onChange: (value: number) => void;
   min: number;
   max: number;
   step?: number;
@@ -16,31 +11,31 @@ interface SliderProps {
 }
 
 export function Slider({
-  field,
   label,
+  value,
+  onChange,
   min,
   max,
   step = 1,
   unit,
 }: SliderProps) {
-  const { state, setField } = useCirqueState();
   const [local, setLocal] = useState<number | null>(null);
 
-  const value = local ?? state?.[field] ?? min;
+  const display = local ?? value;
 
   useEffect(() => {
     if (local === null) return;
     const id = setTimeout(() => {
-      void setField(field, local, true);
+      onChange(local);
       setLocal(null);
     }, 250);
     return () => clearTimeout(id);
-  }, [local, field, setField]);
+  }, [local, onChange]);
 
   return (
     <div className="slider">
       <label>
-        {label}: {value}
+        {label}: {display}
         {unit}
       </label>
       <input
@@ -48,7 +43,7 @@ export function Slider({
         min={min}
         max={max}
         step={step}
-        value={value}
+        value={display}
         onChange={(e) => setLocal(Number(e.target.value))}
       />
     </div>
