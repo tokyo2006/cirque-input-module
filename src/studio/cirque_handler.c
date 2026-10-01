@@ -138,8 +138,49 @@ static int handle_get_state(const tokyo2006_cirque_GetStateRequest *req,
     state.pointer_speed_position     = zmk_pointing_speed_get_position(ZMK_POINTING_SPEED_TARGET_POINTER);
     state.scroll_speed_position      = zmk_pointing_speed_get_position(ZMK_POINTING_SPEED_TARGET_SCROLL);
 
+    /* proto3 `optional` requires explicit presence: mark every field present so
+     * nanopb actually serializes it. Without this the response encodes empty. */
+    state.has_data_mode = true;
+    state.has_sensitivity = true;
+    state.has_invert_x = true;
+    state.has_invert_y = true;
+    state.has_swap_xy = true;
+    state.has_rotate_degrees = true;
+    state.has_primary_tap_enable = true;
+    state.has_secondary_tap_enable = true;
+    state.has_aux_tap_enable = true;
+    state.has_tap_max_ms = true;
+    state.has_tap_max_movement = true;
+    state.has_tap_click_ms = true;
+    state.has_tap_drag_enable = true;
+    state.has_tap_drag_timeout_ms = true;
+    state.has_tap_drag_max_movement = true;
+    state.has_secondary_tap_area_width = true;
+    state.has_secondary_tap_area_height = true;
+    state.has_aux_tap_area_width = true;
+    state.has_aux_tap_area_height = true;
+    state.has_edge_motion_enable = true;
+    state.has_edge_motion_zone = true;
+    state.has_edge_motion_speed = true;
+    state.has_edge_motion_interval_ms = true;
+    state.has_edge_motion_start_ms = true;
+    state.has_right_edge_scroll_enable = true;
+    state.has_top_edge_scroll_enable = true;
+    state.has_scroll_zone = true;
+    state.has_scroll_divisor = true;
+    state.has_invert_scroll = true;
+    state.has_relative_multiplier = true;
+    state.has_relative_divisor = true;
+    state.has_absolute_relative_multiplier = true;
+    state.has_absolute_relative_divisor = true;
+    state.has_sleep_mode_enable = true;
+    state.has_drag_scroll_enabled = true;
+    state.has_pointer_speed_position = true;
+    state.has_scroll_speed_position = true;
+
     tokyo2006_cirque_GetStateResponse get_resp = tokyo2006_cirque_GetStateResponse_init_zero;
     get_resp.state = state;
+    get_resp.has_state = true;
     resp->which_response_type = tokyo2006_cirque_Response_get_state_tag;
     resp->response_type.get_state = get_resp;
     return 0;
@@ -326,6 +367,7 @@ static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
     handle_get_state(&greq, resp);
     /* But we want set_resp, not get_state in response. Hack: re-extract. */
     set_resp.state = resp->response_type.get_state.state;
+    set_resp.has_state = true;
     resp->which_response_type = tokyo2006_cirque_Response_set_state_tag;
     resp->response_type.set_state = set_resp;
     return 0;
@@ -361,6 +403,7 @@ static int handle_reset(const tokyo2006_cirque_ResetRequest *req,
 
     tokyo2006_cirque_ResetResponse reset_resp = tokyo2006_cirque_ResetResponse_init_zero;
     reset_resp.state = resp->response_type.get_state.state;
+    reset_resp.has_state = true;
     resp->which_response_type = tokyo2006_cirque_Response_reset_tag;
     resp->response_type.reset = reset_resp;
     return 0;
