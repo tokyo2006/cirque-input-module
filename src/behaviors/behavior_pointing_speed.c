@@ -258,6 +258,22 @@ void zmk_pointing_speed_set_initial_position(enum zmk_pointing_speed_target targ
 	}
 }
 
+void zmk_pointing_speed_set_position(enum zmk_pointing_speed_target target, uint8_t position)
+{
+	for (int i = 0; i < POINTING_SPEED_ENDPOINT_COUNT; i++) {
+		struct pointing_speed_state *state = speed_state_for_target_and_endpoint(target, i);
+
+		uint8_t clamped = clamp_speed_position(position);
+		state->position = clamped;
+		state->has_multiplier_override = false;
+		state->multiplier_q16 =
+			zmk_pointing_speed_multiplier_q16(clamped, state->min_percent, state->max_percent);
+	}
+
+	pointing_speed_schedule_save();
+	raise_trackpad_status_changed();
+}
+
 void zmk_pointing_speed_set_range(enum zmk_pointing_speed_target target, uint16_t min_percent,
 				  uint16_t max_percent)
 {

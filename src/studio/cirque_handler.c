@@ -15,6 +15,8 @@
 #endif
 
 #include <zmk/cirque_settings.h>
+#include <zmk/drag_scroll.h>
+#include <zmk/pointing_speed.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -132,6 +134,9 @@ static int handle_get_state(const tokyo2006_cirque_GetStateRequest *req,
     state.absolute_relative_multiplier = cirque_state_get_abs_relative_multiplier(dev);
     state.absolute_relative_divisor  = cirque_state_get_abs_relative_divisor(dev);
     state.sleep_mode_enable          = cirque_state_get_sleep_mode_enable(dev);
+    state.drag_scroll_enabled        = zmk_drag_scroll_is_enabled();
+    state.pointer_speed_position     = zmk_pointing_speed_get_position(ZMK_POINTING_SPEED_TARGET_POINTER);
+    state.scroll_speed_position      = zmk_pointing_speed_get_position(ZMK_POINTING_SPEED_TARGET_SCROLL);
 
     tokyo2006_cirque_GetStateResponse get_resp = tokyo2006_cirque_GetStateResponse_init_zero;
     get_resp.state = state;
@@ -206,6 +211,14 @@ static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
     APPLY(sleep_mode_enable,        cirque_state_set_sleep_mode_enable(dev, req->state.sleep_mode_enable));
 
 #undef APPLY
+
+    /* Mirror fields (not part of the 34 cirque runtime settings): apply
+     * directly against their runtime APIs. */
+    zmk_drag_scroll_set_enabled(req->state.drag_scroll_enabled);
+    zmk_pointing_speed_set_position(ZMK_POINTING_SPEED_TARGET_POINTER,
+                                    (uint8_t)MIN(req->state.pointer_speed_position, 100));
+    zmk_pointing_speed_set_position(ZMK_POINTING_SPEED_TARGET_SCROLL,
+                                    (uint8_t)MIN(req->state.scroll_speed_position, 100));
 
     if (first_rc != 0) {
         tokyo2006_cirque_ErrorResponse err = tokyo2006_cirque_ErrorResponse_init_zero;
