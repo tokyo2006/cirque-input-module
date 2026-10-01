@@ -89,15 +89,10 @@ static int handle_get_state(const tokyo2006_cirque_GetStateRequest *req,
                             tokyo2006_cirque_Response *resp) {
     ARG_UNUSED(req);
 
+    /* dev is NULL when no cirque,pinnacle2 node exists (e.g. tests, or a split
+     * half whose trackpad is on the other hand). The state layer falls back to
+     * a static store so the RPC still round-trips. */
     const struct device *dev = DEVICE_DT_GET_ANY(cirque_pinnacle2);
-    if (dev == NULL) {
-        tokyo2006_cirque_ErrorResponse err = tokyo2006_cirque_ErrorResponse_init_zero;
-        snprintf(err.message, sizeof(err.message),
-                 "No cirque,pinnacle2 device found in devicetree");
-        resp->which_response_type = tokyo2006_cirque_Response_error_tag;
-        resp->response_type.error = err;
-        return -ENODEV;
-    }
 
     tokyo2006_cirque_CirqueState state = tokyo2006_cirque_CirqueState_init_zero;
     state.data_mode                  = (tokyo2006_cirque_DataMode)cirque_state_get_data_mode(dev);
@@ -188,14 +183,8 @@ static int handle_get_state(const tokyo2006_cirque_GetStateRequest *req,
 
 static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
                             tokyo2006_cirque_Response *resp) {
+    /* dev may be NULL -- see handle_get_state. */
     const struct device *dev = DEVICE_DT_GET_ANY(cirque_pinnacle2);
-    if (dev == NULL) {
-        tokyo2006_cirque_ErrorResponse err = tokyo2006_cirque_ErrorResponse_init_zero;
-        snprintf(err.message, sizeof(err.message), "No cirque,pinnacle2 device");
-        resp->which_response_type = tokyo2006_cirque_Response_error_tag;
-        resp->response_type.error = err;
-        return -ENODEV;
-    }
 
     /* If persist=true, mark so settings subsystem can save later */
     bool persist = req->persist;
@@ -351,7 +340,7 @@ static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
     /* Push the updated runtime state into the ASIC registers. */
     (void)cirque_state_apply_all(dev);
 
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT) && IS_ENABLED(CONFIG_INPUT_PINNACLE2)
     /* Notify the peripheral that central state changed, shipping the full
      * runtime state so it stays in sync. */
     cirque_relay_send_state(dev);
@@ -375,21 +364,15 @@ static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
 
 static int handle_reset(const tokyo2006_cirque_ResetRequest *req,
                         tokyo2006_cirque_Response *resp) {
+    /* dev may be NULL -- see handle_get_state. */
     const struct device *dev = DEVICE_DT_GET_ANY(cirque_pinnacle2);
-    if (dev == NULL) {
-        tokyo2006_cirque_ErrorResponse err = tokyo2006_cirque_ErrorResponse_init_zero;
-        snprintf(err.message, sizeof(err.message), "No cirque,pinnacle2 device");
-        resp->which_response_type = tokyo2006_cirque_Response_error_tag;
-        resp->response_type.error = err;
-        return -ENODEV;
-    }
 
     cirque_state_load_defaults(dev);
 
     /* Push the reset (default) state into the ASIC registers. */
     (void)cirque_state_apply_all(dev);
 
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT) && IS_ENABLED(CONFIG_INPUT_PINNACLE2)
     /* Notify peripheral of reset with the full reset state. */
     cirque_relay_send_state(dev);
 #endif

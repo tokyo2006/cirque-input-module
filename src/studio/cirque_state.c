@@ -18,8 +18,22 @@
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
+/* Driver-side hooks, provided by drivers/input/input_pinnacle.c whenever a
+ * cirque,pinnacle2 node exists. Declared weak so this file links even in
+ * builds without a trackpad device -- e.g. Studio RPC over USB in tests, or a
+ * split half whose trackpad lives on the other hand. With no device the RPC
+ * operates on a static fallback state so get/set/reset still round-trip; a
+ * real keyboard always has a device, so behaviour there is unchanged. */
+extern struct cirque_runtime_state *cirque_driver_get_state(const struct device *dev)
+    __attribute__((weak));
+extern void cirque_driver_apply_all(const struct device *dev) __attribute__((weak));
+
+static struct cirque_runtime_state cirque_fallback_state;
+
 struct cirque_runtime_state *cirque_state_get_struct(const struct device *dev) {
-    extern struct cirque_runtime_state *cirque_driver_get_state(const struct device *dev);
+    if (dev == NULL || cirque_driver_get_state == NULL) {
+        return &cirque_fallback_state;
+    }
     return cirque_driver_get_state(dev);
 }
 
@@ -176,7 +190,9 @@ int cirque_state_load_from_settings(const struct device *dev) {
 }
 
 int cirque_state_apply_all(const struct device *dev) {
-    extern void cirque_driver_apply_all(const struct device *dev);
+    if (dev == NULL || cirque_driver_apply_all == NULL) {
+        return 0;
+    }
     cirque_driver_apply_all(dev);
     return 0;
 }

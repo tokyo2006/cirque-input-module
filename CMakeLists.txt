@@ -33,10 +33,13 @@ target_sources(app PRIVATE
 # on the driver: the driver calls cirque_state_get_*/load_defaults, and
 # cirque_state.c calls cirque_driver_get_state/apply_all. Both are therefore
 # compiled together whenever the driver is (CONFIG_INPUT_PINNACLE2). Compiling
-# cirque_state.c on BOTH split roles lets the peripheral apply relayed state
-# via cirque_state_set_*(). Its cirque_settings_load_cb dependency is gated
-# behind CONFIG_ZMK_CUSTOM_SETTINGS (central-only).
-if(CONFIG_INPUT_PINNACLE2)
+# it also whenever the Studio RPC is enabled lets the RPC link (and round-trip
+# against a static fallback state) in device-less builds -- tests, or a split
+# half whose trackpad is on the other hand. Compiling cirque_state.c on BOTH
+# split roles lets the peripheral apply relayed state via cirque_state_set_*().
+# Its cirque_settings_load_cb dependency is gated behind
+# CONFIG_ZMK_CUSTOM_SETTINGS (central-only).
+if(CONFIG_INPUT_PINNACLE2 OR CONFIG_ZMK_CIRQUE_STUDIO_RPC)
   target_sources(app PRIVATE src/studio/cirque_state.c)
 endif()
 
