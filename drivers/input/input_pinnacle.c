@@ -1113,6 +1113,10 @@ int zmk_cirque_mode_apply(const struct device *dev, enum zmk_cirque_mode_action 
 		return rc;
 	}
 	drv_data->relative_mode = relative_mode;
+	/* Keep the runtime-state mirror in sync so a later apply_all (from the
+	 * Studio RPC) doesn't revert this keymap toggle, and so get_state reports
+	 * the mode the device actually runs. */
+	cirque_state_set_data_mode(dev, relative_mode ? 1 : 0);
 
 	rc = pinnacle_configure_idle_packets(dev, relative_mode);
 	if (rc) {
