@@ -5,6 +5,7 @@ on:
     branches:
       - "main+custom-studio-protocol"
       - "main"
+      - "feat/*"
     paths-ignore:
       - "**/*.md"
       - .github/workflows/copilot-setup-steps.yml

@@ -13,6 +13,7 @@ on:
     branches:
       - "main+custom-studio-protocol"
       - "main"
+      - "feat/*"
     # (GitHub Actions does not support YAML anchors, so this list is repeated
     # under pull_request below -- keep the two in sync.)
     paths:
