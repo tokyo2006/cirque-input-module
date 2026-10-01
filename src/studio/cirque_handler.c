@@ -22,7 +22,7 @@
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 static struct zmk_rpc_custom_subsystem_meta cirque_subsystem_meta = {
-    ZMK_RPC_CUSTOM_SUBSYSTEM_UI_URLS("https://tokyo2006.github.io/cirque-input-module/"),
+    ZMK_RPC_CUSTOM_SUBSYSTEM_UI_URLS("https://blog.lkjxblog.site/cirque-input-module/"),
     // Unsecured is suggested by default to avoid unlocking in un-reliable
     // environments.
     // The web template already implements the unlock prompt/retry flow (see
