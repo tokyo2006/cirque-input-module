@@ -1,14 +1,10 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import {
   ZMKAppContext,
   useCustomSubsystem,
 } from "@cormoran/zmk-studio-react-hook";
 import { decodeResponse, encodeRequest } from "./cirqueCodec";
-import type {
-  CirqueRequest,
-  CirqueResponse,
-  CirqueState,
-} from "./cirqueTypes";
+import type { CirqueRequest, CirqueResponse, CirqueState } from "./cirqueTypes";
 
 export type { CirqueState };
 
@@ -29,7 +25,7 @@ export interface UseCirqueStateReturn {
   setField: <K extends keyof CirqueState>(
     field: K,
     value: CirqueState[K],
-    persist?: boolean,
+    persist?: boolean
   ) => Promise<void>;
   /** Reset the device state (optionally to factory defaults). */
   reset: (factoryDefaults?: boolean) => Promise<void>;
@@ -46,7 +42,7 @@ export function useCirqueState(): UseCirqueStateReturn {
 
   const { ready, call } = useCustomSubsystem<CirqueRequest, CirqueResponse>(
     SUBSYSTEM_IDENTIFIER,
-    { encode: encodeRequest, decode: decodeResponse },
+    { encode: encodeRequest, decode: decodeResponse }
   );
 
   const [state, setState] = useState<CirqueState | null>(null);
@@ -85,7 +81,7 @@ export function useCirqueState(): UseCirqueStateReturn {
     async <K extends keyof CirqueState>(
       field: K,
       value: CirqueState[K],
-      persist = true,
+      persist = true
     ) => {
       if (!state) return;
       const next: CirqueState = { ...state, [field]: value };
@@ -97,7 +93,7 @@ export function useCirqueState(): UseCirqueStateReturn {
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [call, state, handleResponse],
+    [call, state, handleResponse]
   );
 
   const reset = useCallback(
@@ -108,13 +104,16 @@ export function useCirqueState(): UseCirqueStateReturn {
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [call, handleResponse],
+    [call, handleResponse]
   );
 
   // Auto-load the current state as soon as the subsystem becomes ready.
+  const didInitialLoad = useRef(false);
   useEffect(() => {
+    if (!ready || didInitialLoad.current) return;
+    didInitialLoad.current = true;
     void refresh();
-  }, [refresh]);
+  }, [ready, refresh]);
 
   return { state, setField, reset, refresh, isLoading, error, isConnected };
 }

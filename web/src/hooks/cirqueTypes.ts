@@ -69,9 +69,8 @@ export interface CirqueState {
   scrollSpeedPosition: number;
 }
 
-export interface GetStateRequest {
-  // empty message
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- empty proto message
+export interface GetStateRequest {}
 
 export interface GetStateResponse {
   state: CirqueState;

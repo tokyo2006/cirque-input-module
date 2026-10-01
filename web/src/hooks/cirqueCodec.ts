@@ -69,7 +69,7 @@ const STATE_FIELDS: StateFieldDescriptor[] = [
 ];
 
 const FIELDS_BY_NUM = new Map<number, StateFieldDescriptor>(
-  STATE_FIELDS.map((f) => [f.num, f]),
+  STATE_FIELDS.map((f) => [f.num, f])
 );
 
 // ---------------------------------------------------------------------------
@@ -89,7 +89,11 @@ function writeTag(out: number[], fieldNum: number, wireType: number): void {
   encodeVarint((fieldNum << 3) | wireType, out);
 }
 
-function writeVarintField(out: number[], fieldNum: number, value: number): void {
+function writeVarintField(
+  out: number[],
+  fieldNum: number,
+  value: number
+): void {
   writeTag(out, fieldNum, WIRE_VARINT);
   encodeVarint(value, out);
 }
@@ -97,7 +101,7 @@ function writeVarintField(out: number[], fieldNum: number, value: number): void 
 function writeLengthDelimited(
   out: number[],
   fieldNum: number,
-  body: number[],
+  body: number[]
 ): void {
   writeTag(out, fieldNum, WIRE_LENGTH_DELIMITED);
   encodeVarint(body.length, out);
