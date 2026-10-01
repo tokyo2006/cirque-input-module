@@ -17,11 +17,11 @@ host <dbg> ble_studio_host: discover_func: [SUBSCRIBED]
 host <dbg> ble_studio_host: write_func: [WROTE REQUEST]
 host <dbg> ble_studio_host: handle_frame: [RPC RESPONSE 1]
 host <dbg> ble_studio_host: handle_frame: payload
-host                        0a 4e 08 01 a2 06 49 0a  47 0a 45 12 11 74 6f 6b |.N....I. G.E..tok
-host                        79 6f 32 30 30 36 5f 5f  63 69 72 71 75 65 1a 30 |yo2006__ cirque.0
-host                        68 74 74 70 73 3a 2f 2f  74 6f 6b 79 6f 32 30 30 |https:// tokyo200
-host                        36 2e 67 69 74 68 75 62  2e 69 6f 2f 63 69 72 71 |6.github .io/cirq
-host                        75 65 2d 69 6e 70 75 74  2d 6d 6f 64 75 6c 65 2f |ue-input -module/
+host                        0a 4d 08 01 a2 06 48 0a  46 0a 44 12 11 74 6f 6b |.M....H. F.D..tok
+host                        79 6f 32 30 30 36 5f 5f  63 69 72 71 75 65 1a 2f |yo2006__ cirque./
+host                        68 74 74 70 73 3a 2f 2f  62 6c 6f 67 2e 6c 6b 6a |https:// blog.lkj
+host                        78 62 6c 6f 67 2e 73 69  74 65 2f 63 69 72 71 75 |xblog.si te/cirqu
+host                        65 2d 69 6e 70 75 74 2d  6d 6f 64 75 6c 65 2f    |e-input- module/ 
 host <dbg> ble_studio_host: write_func: [WROTE REQUEST]
 host <dbg> ble_studio_host: handle_frame: [RPC RESPONSE 2]
 host <dbg> ble_studio_host: handle_frame: payload
