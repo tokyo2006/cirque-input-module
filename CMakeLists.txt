@@ -70,10 +70,13 @@ if(CONFIG_ZMK_CIRQUE_STUDIO_RPC)
   target_link_libraries(app PRIVATE ${ZEPHYR_CURRENT_LIBRARY})
 endif()
 
-if(CONFIG_ZMK_SPLIT_RELAY_EVENT)
+if(CONFIG_ZMK_SPLIT_RELAY_EVENT AND CONFIG_INPUT_PINNACLE2)
   # Split-relay helper: compiled into both halves when split + relay events are
-  # enabled. The central uses cirque_relay_send_state() from the Studio RPC
-  # handler; the peripheral receives the relayed carrier via the standard
-  # ZMK_RELAY_EVENT_HANDLE macro and applies it.
+  # enabled AND the trackpad driver is present (cirque_relay.c references
+  # cirque_state_get_*/set_* which only cirque_state.c defines; that file is
+  # gated on CONFIG_INPUT_PINNACLE2 above). The central uses
+  # cirque_relay_send_state() from the Studio RPC handler; the peripheral
+  # receives the relayed carrier via the standard ZMK_RELAY_EVENT_HANDLE macro
+  # and applies it.
   target_sources(app PRIVATE src/split/cirque_relay.c)
 endif()
