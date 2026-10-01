@@ -220,6 +220,9 @@ static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
         (void)cirque_settings_save_all(dev);
     }
 
+    /* Push the updated runtime state into the ASIC registers. */
+    (void)cirque_state_apply_all(dev);
+
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
     /* Notify the peripheral that central state changed, shipping the full
      * runtime state so it stays in sync. */
@@ -253,6 +256,9 @@ static int handle_reset(const tokyo2006_cirque_ResetRequest *req,
     }
 
     cirque_state_load_defaults(dev);
+
+    /* Push the reset (default) state into the ASIC registers. */
+    (void)cirque_state_apply_all(dev);
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_RELAY_EVENT)
     /* Notify peripheral of reset with the full reset state. */
