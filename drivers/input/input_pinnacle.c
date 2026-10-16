@@ -21,6 +21,15 @@
 
 LOG_MODULE_REGISTER(pinnacle, CONFIG_INPUT_LOG_LEVEL);
 
+/*
+ * Driver-side hooks consumed by src/studio/cirque_state.c (which declares them
+ * weak so it links without a trackpad device). Forward-declared here so
+ * pinnacle_load_runtime_state() can call cirque_driver_get_state() before the
+ * definitions further down in this file.
+ */
+struct cirque_runtime_state *cirque_driver_get_state(const struct device *dev);
+void cirque_driver_apply_all(const struct device *dev);
+
 static bool pinnacle_is_relative_mode(const struct device *dev)
 {
 	struct pinnacle_data *drv_data = dev->data;
