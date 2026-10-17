@@ -133,7 +133,7 @@ static int pinnacle_soft_reset(const struct device *dev)
 			       PINNACLE_CALIBRATION_AWAIT_DELAY_POLL_US,
 		       k_sleep(K_USEC(PINNACLE_CALIBRATION_AWAIT_DELAY_POLL_US)));
 	if (!ret) {
-		LOG_ERR("Failed to wait for calibration completion");
+		LOG_ERR("Failed to wait for calibration completion (Status1=0x%x)", value);
 		return -EIO;
 	}
 
