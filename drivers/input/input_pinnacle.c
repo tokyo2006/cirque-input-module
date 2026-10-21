@@ -15,10 +15,20 @@
 #include <zephyr/sys/util.h>
 
 #include <zmk/cirque_mode.h>
+#include <zmk/cirque_state.h>
 
 #include "input_pinnacle.h"
 
 LOG_MODULE_REGISTER(pinnacle, CONFIG_INPUT_LOG_LEVEL);
+
+/*
+ * Driver-side hooks consumed by src/studio/cirque_state.c (which declares them
+ * weak so it links without a trackpad device). Forward-declared here so
+ * pinnacle_load_runtime_state() can call cirque_driver_get_state() before the
+ * definitions further down in this file.
+ */
+struct cirque_runtime_state *cirque_driver_get_state(const struct device *dev);
+void cirque_driver_apply_all(const struct device *dev);
 
 static bool pinnacle_is_relative_mode(const struct device *dev)
 {
@@ -123,7 +133,7 @@ static int pinnacle_soft_reset(const struct device *dev)
 			       PINNACLE_CALIBRATION_AWAIT_DELAY_POLL_US,
 		       k_sleep(K_USEC(PINNACLE_CALIBRATION_AWAIT_DELAY_POLL_US)));
 	if (!ret) {
-		LOG_ERR("Failed to wait for calibration completion");
+		LOG_ERR("Failed to wait for calibration completion (Status1=0x%x)", value);
 		return -EIO;
 	}
 
@@ -242,8 +252,6 @@ static int pinnacle_era_read(const struct device *dev, uint16_t address, uint8_t
 
 static int pinnacle_set_sensitivity(const struct device *dev)
 {
-	const struct pinnacle_config *config = dev->config;
-
 	uint8_t value;
 	int rc;
 
@@ -255,19 +263,13 @@ static int pinnacle_set_sensitivity(const struct device *dev)
 	/* Clear BIT(7) and BIT(6) */
 	value &= 0x3F;
 
-	switch (config->sensitivity) {
-	case PINNACLE_SENSITIVITY_X1:
-		value |= PINNACLE_ERA_CONFIG_ADC_ATTENUATION_X1;
-		break;
-	case PINNACLE_SENSITIVITY_X2:
+	/* Runtime state models only two levels (0=1x, 1=2x); map back to the
+	 * ADC-attenuation bits the ASIC understands. Anything >= 1 maps to 2x.
+	 */
+	if (cirque_state_get_sensitivity(dev) >= 1) {
 		value |= PINNACLE_ERA_CONFIG_ADC_ATTENUATION_X2;
-		break;
-	case PINNACLE_SENSITIVITY_X3:
-		value |= PINNACLE_ERA_CONFIG_ADC_ATTENUATION_X3;
-		break;
-	case PINNACLE_SENSITIVITY_X4:
-		value |= PINNACLE_ERA_CONFIG_ADC_ATTENUATION_X4;
-		break;
+	} else {
+		value |= PINNACLE_ERA_CONFIG_ADC_ATTENUATION_X1;
 	}
 
 	rc = pinnacle_era_write(dev, PINNACLE_ERA_REG_CONFIG, value);
@@ -289,10 +291,10 @@ static int pinnacle_configure_feed(const struct device *dev, bool relative_mode)
 		if (!config->glide_extend_enabled) {
 			value |= PINNACLE_FEED_CONFIG2_GLIDE_EXTEND_DISABLE;
 		}
-		if (config->swap_xy) {
+		if (cirque_state_get_swap_xy(dev)) {
 			value |= PINNACLE_FEED_CONFIG2_SWAP_X_AND_Y;
 		}
-		if (!config->primary_tap_enabled) {
+		if (!cirque_state_get_primary_tap_enable(dev)) {
 			value |= PINNACLE_FEED_CONFIG2_ALL_TAPS_DISABLE;
 		}
 	} else {
@@ -312,10 +314,10 @@ static int pinnacle_configure_feed(const struct device *dev, bool relative_mode)
 	}
 
 	/* Absolute-to-relative mode handles inversion in software after differencing. */
-	if (relative_mode && config->invert_x) {
+	if (relative_mode && cirque_state_get_invert_x(dev)) {
 		value |= PINNACLE_FEED_CONFIG1_X_INVERT;
 	}
-	if (relative_mode && config->invert_y) {
+	if (relative_mode && cirque_state_get_invert_y(dev)) {
 		value |= PINNACLE_FEED_CONFIG1_Y_INVERT;
 	}
 
@@ -328,11 +330,12 @@ static int pinnacle_configure_feed(const struct device *dev, bool relative_mode)
 	return 0;
 }
 
-static uint8_t pinnacle_idle_packets_count(const struct pinnacle_config *config, bool relative_mode)
+static uint8_t pinnacle_idle_packets_count(const struct device *dev, bool relative_mode)
 {
+	const struct pinnacle_config *config = dev->config;
 	uint8_t idle_packets_count = config->idle_packets_count;
 
-	if (((relative_mode && config->primary_tap_enabled) || !relative_mode) &&
+	if (((relative_mode && cirque_state_get_primary_tap_enable(dev)) || !relative_mode) &&
 	    idle_packets_count == 0) {
 		idle_packets_count = 1;
 	}
@@ -342,9 +345,8 @@ static uint8_t pinnacle_idle_packets_count(const struct pinnacle_config *config,
 
 static int pinnacle_configure_idle_packets(const struct device *dev, bool relative_mode)
 {
-	const struct pinnacle_config *config = dev->config;
 	int rc = pinnacle_write(dev, PINNACLE_REG_Z_IDLE,
-				pinnacle_idle_packets_count(config, relative_mode));
+				pinnacle_idle_packets_count(dev, relative_mode));
 
 	if (rc) {
 		LOG_ERR("Failed to set count of Z-idle packets");
@@ -551,10 +553,8 @@ static int pinnacle_seq_read_spi(const struct pinnacle_bus *bus, uint8_t address
 static void pinnacle_decode_sample(const struct device *dev, uint8_t *rx,
 				   union pinnacle_sample *sample)
 {
-	const struct pinnacle_config *config = dev->config;
-
 	if (pinnacle_is_relative_mode(dev)) {
-		if (config->primary_tap_enabled) {
+		if (cirque_state_get_primary_tap_enable(dev)) {
 			sample->btn_primary = (rx[0] & PINNACLE_PACKET_BYTE0_BTN_PRIMARY) == PINNACLE_PACKET_BYTE0_BTN_PRIMARY;
 			sample->btn_secondary = (rx[0] & PINNACLE_PACKET_BYTE0_BTN_SECONDRY) == PINNACLE_PACKET_BYTE0_BTN_SECONDRY;
 			sample->btn_aux = (rx[0] & PINNACLE_PACKET_BYTE0_BTN_AUX) == PINNACLE_PACKET_BYTE0_BTN_AUX;
@@ -619,25 +619,24 @@ static void pinnacle_scale_sample(const struct device *dev, union pinnacle_sampl
 
 static int16_t pinnacle_scale_absolute_delta(const struct device *dev, int32_t delta)
 {
-	const struct pinnacle_config *config = dev->config;
-	int64_t scaled = (int64_t)delta * config->absolute_relative_multiplier;
+	int64_t scaled = (int64_t)delta * cirque_state_get_abs_relative_multiplier(dev);
 
-	scaled /= config->absolute_relative_divisor;
+	scaled /= cirque_state_get_abs_relative_divisor(dev);
 
 	return CLAMP(scaled, INT16_MIN, INT16_MAX);
 }
 
-static void pinnacle_apply_absolute_transform(const struct pinnacle_config *config,
+static void pinnacle_apply_absolute_transform(const struct device *dev,
 					    int32_t *delta_x, int32_t *delta_y)
 {
-	if (config->swap_xy) {
+	if (cirque_state_get_swap_xy(dev)) {
 		int32_t tmp = *delta_x;
 
 		*delta_x = *delta_y;
 		*delta_y = tmp;
 	}
 
-	if (config->invert_x) {
+	if (cirque_state_get_invert_x(dev)) {
 		*delta_x = -*delta_x;
 	}
 }
@@ -667,11 +666,14 @@ static uint16_t pinnacle_abs_bottom(const struct pinnacle_config *config)
 	return config->active_range_y_max;
 }
 
-static bool pinnacle_absolute_point_in_lower_right(const struct pinnacle_config *config,
+static bool pinnacle_absolute_point_in_lower_right(const struct device *dev,
 						  uint16_t x, uint16_t y)
 {
-	if (config->absolute_secondary_tap_area_width == 0 ||
-	    config->absolute_secondary_tap_area_height == 0) {
+	const struct pinnacle_config *config = dev->config;
+	uint16_t secondary_tap_area_width = cirque_state_get_secondary_tap_area_width(dev);
+	uint16_t secondary_tap_area_height = cirque_state_get_secondary_tap_area_height(dev);
+
+	if (secondary_tap_area_width == 0 || secondary_tap_area_height == 0) {
 		return false;
 	}
 
@@ -679,17 +681,20 @@ static bool pinnacle_absolute_point_in_lower_right(const struct pinnacle_config 
 	int32_t left = pinnacle_abs_left(config);
 	int32_t top = pinnacle_abs_top(config);
 	int32_t bottom = pinnacle_abs_bottom(config);
-	int32_t left_boundary = MAX(left, right - config->absolute_secondary_tap_area_width);
-	int32_t top_boundary = MAX(top, bottom - config->absolute_secondary_tap_area_height);
+	int32_t left_boundary = MAX(left, right - secondary_tap_area_width);
+	int32_t top_boundary = MAX(top, bottom - secondary_tap_area_height);
 
 	return x >= left_boundary && y >= top_boundary;
 }
 
-static bool pinnacle_absolute_point_in_upper_left(const struct pinnacle_config *config,
+static bool pinnacle_absolute_point_in_upper_left(const struct device *dev,
 						 uint16_t x, uint16_t y)
 {
-	if (config->absolute_aux_tap_area_width == 0 ||
-	    config->absolute_aux_tap_area_height == 0) {
+	const struct pinnacle_config *config = dev->config;
+	uint16_t aux_tap_area_width = cirque_state_get_aux_tap_area_width(dev);
+	uint16_t aux_tap_area_height = cirque_state_get_aux_tap_area_height(dev);
+
+	if (aux_tap_area_width == 0 || aux_tap_area_height == 0) {
 		return false;
 	}
 
@@ -697,17 +702,18 @@ static bool pinnacle_absolute_point_in_upper_left(const struct pinnacle_config *
 	int32_t left = pinnacle_abs_left(config);
 	int32_t top = pinnacle_abs_top(config);
 	int32_t bottom = pinnacle_abs_bottom(config);
-	int32_t right_boundary = MIN(right, left + config->absolute_aux_tap_area_width);
-	int32_t bottom_boundary = MIN(bottom, top + config->absolute_aux_tap_area_height);
+	int32_t right_boundary = MIN(right, left + aux_tap_area_width);
+	int32_t bottom_boundary = MIN(bottom, top + aux_tap_area_height);
 
 	return x <= right_boundary && y <= bottom_boundary;
 }
 
-static void pinnacle_absolute_logical_position(const struct pinnacle_config *config,
+static void pinnacle_absolute_logical_position(const struct device *dev,
 					      uint16_t raw_x, uint16_t raw_y,
 					      int32_t *logical_x, int32_t *logical_y,
 					      int32_t *logical_width, int32_t *logical_height)
 {
+	const struct pinnacle_config *config = dev->config;
 	int32_t left = config->active_range_x_min;
 	int32_t right = config->active_range_x_max;
 	int32_t top = config->active_range_y_min;
@@ -717,7 +723,7 @@ static void pinnacle_absolute_logical_position(const struct pinnacle_config *con
 	int32_t width = right - left;
 	int32_t height = bottom - top;
 
-	if (config->swap_xy) {
+	if (cirque_state_get_swap_xy(dev)) {
 		int32_t tmp = x;
 
 		x = y;
@@ -727,7 +733,7 @@ static void pinnacle_absolute_logical_position(const struct pinnacle_config *con
 		height = tmp;
 	}
 
-	if (config->invert_x) {
+	if (cirque_state_get_invert_x(dev)) {
 		x = width - x;
 	}
 
@@ -740,24 +746,23 @@ static void pinnacle_absolute_logical_position(const struct pinnacle_config *con
 static bool pinnacle_absolute_edge_motion_active(const struct device *dev, int64_t *norm_x,
 						 int64_t *norm_y)
 {
-	const struct pinnacle_config *config = dev->config;
 	struct pinnacle_data *drv_data = dev->data;
 	int32_t x;
 	int32_t y;
 	int32_t width;
 	int32_t height;
-	int32_t zone = config->absolute_edge_motion_zone;
+	int32_t zone = cirque_state_get_edge_motion_zone(dev);
 	int64_t radius_x;
 	int64_t radius_y;
 	int64_t radius_min;
 	int64_t distance_sq;
 	int64_t threshold;
 
-	if (!config->absolute_edge_motion_enabled || zone == 0) {
+	if (!cirque_state_get_edge_motion_enable(dev) || zone == 0) {
 		return false;
 	}
 
-	pinnacle_absolute_logical_position(config, drv_data->touch_current_x,
+	pinnacle_absolute_logical_position(dev, drv_data->touch_current_x,
 						 drv_data->touch_current_y, &x, &y, &width, &height);
 	radius_x = width / 2;
 	radius_y = height / 2;
@@ -779,7 +784,7 @@ static bool pinnacle_absolute_edge_motion_active(const struct device *dev, int64
 	return distance_sq >= threshold * threshold;
 }
 
-static void pinnacle_absolute_edge_motion_delta_from_vector(const struct pinnacle_config *config,
+static void pinnacle_absolute_edge_motion_delta_from_vector(const struct device *dev,
 							    int64_t vector_x,
 							    int64_t vector_y,
 							    int32_t *delta_x,
@@ -787,7 +792,7 @@ static void pinnacle_absolute_edge_motion_delta_from_vector(const struct pinnacl
 {
 	int64_t abs_x = vector_x < 0 ? -vector_x : vector_x;
 	int64_t abs_y = vector_y < 0 ? -vector_y : vector_y;
-	int32_t speed = config->absolute_edge_motion_speed;
+	int32_t speed = cirque_state_get_edge_motion_speed(dev);
 	int32_t diagonal = MAX(1, (speed * 3) / 4);
 	int32_t sign_x = vector_x < 0 ? -1 : 1;
 	int32_t sign_y = vector_y < 0 ? -1 : 1;
@@ -815,7 +820,6 @@ static void pinnacle_absolute_edge_motion_delta_from_vector(const struct pinnacl
 static void pinnacle_absolute_edge_motion_delta(const struct device *dev, int32_t *delta_x,
 					       int32_t *delta_y)
 {
-	const struct pinnacle_config *config = dev->config;
 	int64_t norm_x;
 	int64_t norm_y;
 
@@ -826,35 +830,34 @@ static void pinnacle_absolute_edge_motion_delta(const struct device *dev, int32_
 		return;
 	}
 
-	pinnacle_absolute_edge_motion_delta_from_vector(config, norm_x, norm_y, delta_x, delta_y);
+	pinnacle_absolute_edge_motion_delta_from_vector(dev, norm_x, norm_y, delta_x, delta_y);
 }
 
 static enum pinnacle_absolute_scroll_mode
 pinnacle_absolute_scroll_mode_for_touch(const struct device *dev, uint16_t raw_x, uint16_t raw_y)
 {
-	const struct pinnacle_config *config = dev->config;
 	int32_t x;
 	int32_t y;
 	int32_t width;
 	int32_t height;
-	int32_t zone = config->absolute_scroll_zone;
+	int32_t zone = cirque_state_get_scroll_zone(dev);
 	int32_t zone_x;
 	int32_t zone_y;
 
-	if ((!config->absolute_right_edge_scroll_enabled &&
-	     !config->absolute_top_edge_scroll_enabled) || zone == 0) {
+	if ((!cirque_state_get_right_edge_scroll_enable(dev) &&
+	     !cirque_state_get_top_edge_scroll_enable(dev)) || zone == 0) {
 		return PINNACLE_ABSOLUTE_SCROLL_NONE;
 	}
 
-	pinnacle_absolute_logical_position(config, raw_x, raw_y, &x, &y, &width, &height);
+	pinnacle_absolute_logical_position(dev, raw_x, raw_y, &x, &y, &width, &height);
 	zone_x = MIN(zone, width);
 	zone_y = MIN(zone, height);
 
-	if (config->absolute_right_edge_scroll_enabled && x >= width - zone_x) {
+	if (cirque_state_get_right_edge_scroll_enable(dev) && x >= width - zone_x) {
 		return PINNACLE_ABSOLUTE_SCROLL_VERTICAL;
 	}
 
-	if (config->absolute_top_edge_scroll_enabled && y <= zone_y) {
+	if (cirque_state_get_top_edge_scroll_enable(dev) && y <= zone_y) {
 		return PINNACLE_ABSOLUTE_SCROLL_HORIZONTAL;
 	}
 
@@ -877,7 +880,6 @@ static void pinnacle_report_absolute_scroll(const struct device *dev, uint16_t p
 					   uint16_t previous_raw_y, uint16_t current_raw_x,
 					   uint16_t current_raw_y)
 {
-	const struct pinnacle_config *config = dev->config;
 	struct pinnacle_data *drv_data = dev->data;
 	int32_t previous_x;
 	int32_t previous_y;
@@ -893,9 +895,9 @@ static void pinnacle_report_absolute_scroll(const struct device *dev, uint16_t p
 		return;
 	}
 
-	pinnacle_absolute_logical_position(config, previous_raw_x, previous_raw_y, &previous_x,
+	pinnacle_absolute_logical_position(dev, previous_raw_x, previous_raw_y, &previous_x,
 					 &previous_y, &width, &height);
-	pinnacle_absolute_logical_position(config, current_raw_x, current_raw_y, &current_x,
+	pinnacle_absolute_logical_position(dev, current_raw_x, current_raw_y, &current_x,
 					 &current_y, &width, &height);
 
 	if (drv_data->scroll_mode == PINNACLE_ABSOLUTE_SCROLL_VERTICAL) {
@@ -907,7 +909,7 @@ static void pinnacle_report_absolute_scroll(const struct device *dev, uint16_t p
 	}
 
 	ticks = pinnacle_absolute_scroll_accumulate(drv_data, delta,
-						      config->absolute_scroll_divisor);
+						      cirque_state_get_scroll_divisor(dev));
 	if (ticks != 0) {
 		pinnacle_report_rel(dev, code, ticks, true);
 	}
@@ -915,7 +917,6 @@ static void pinnacle_report_absolute_scroll(const struct device *dev, uint16_t p
 
 static void pinnacle_schedule_absolute_edge_motion(const struct device *dev)
 {
-	const struct pinnacle_config *config = dev->config;
 	struct pinnacle_data *drv_data = dev->data;
 	int32_t delta_x;
 	int32_t delta_y;
@@ -923,7 +924,7 @@ static void pinnacle_schedule_absolute_edge_motion(const struct device *dev)
 	int64_t delay_ms;
 
 	if (pinnacle_is_relative_mode(dev) || !drv_data->touching ||
-	    !config->absolute_edge_motion_enabled ||
+	    !cirque_state_get_edge_motion_enable(dev) ||
 	    !drv_data->absolute_motion_started ||
 	    drv_data->scroll_mode != PINNACLE_ABSOLUTE_SCROLL_NONE) {
 		k_work_cancel_delayable(&drv_data->edge_motion_work);
@@ -937,9 +938,9 @@ static void pinnacle_schedule_absolute_edge_motion(const struct device *dev)
 	}
 
 	elapsed_ms = k_uptime_get() - drv_data->touch_start_time_ms;
-	delay_ms = MAX(0, (int64_t)config->absolute_edge_motion_start_ms - elapsed_ms);
+	delay_ms = MAX(0, (int64_t)cirque_state_get_edge_motion_start_ms(dev) - elapsed_ms);
 	if (delay_ms == 0) {
-		delay_ms = config->absolute_edge_motion_interval_ms;
+		delay_ms = cirque_state_get_edge_motion_interval_ms(dev);
 	}
 
 	k_work_schedule(&drv_data->edge_motion_work, K_MSEC(delay_ms));
@@ -950,7 +951,6 @@ static void pinnacle_edge_motion_work_cb(struct k_work *work)
 	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
 	struct pinnacle_data *drv_data = CONTAINER_OF(dwork, struct pinnacle_data, edge_motion_work);
 	const struct device *dev = drv_data->dev;
-	const struct pinnacle_config *config = dev->config;
 	int32_t delta_x;
 	int32_t delta_y;
 
@@ -968,18 +968,16 @@ static void pinnacle_edge_motion_work_cb(struct k_work *work)
 	pinnacle_report_rel(dev, INPUT_REL_X, CLAMP(delta_x, INT16_MIN, INT16_MAX), false);
 	pinnacle_report_rel(dev, INPUT_REL_Y, CLAMP(delta_y, INT16_MIN, INT16_MAX), true);
 	k_work_reschedule(&drv_data->edge_motion_work,
-			  K_MSEC(config->absolute_edge_motion_interval_ms));
+			  K_MSEC(cirque_state_get_edge_motion_interval_ms(dev)));
 }
 
 static uint16_t pinnacle_absolute_tap_code(const struct device *dev, uint16_t x, uint16_t y)
 {
-	const struct pinnacle_config *config = dev->config;
-
-	if (pinnacle_absolute_point_in_lower_right(config, x, y)) {
+	if (pinnacle_absolute_point_in_lower_right(dev, x, y)) {
 		return INPUT_BTN_0 + 1;
 	}
 
-	if (pinnacle_absolute_point_in_upper_left(config, x, y)) {
+	if (pinnacle_absolute_point_in_upper_left(dev, x, y)) {
 		return INPUT_BTN_0 + 2;
 	}
 
@@ -989,22 +987,20 @@ static uint16_t pinnacle_absolute_tap_code(const struct device *dev, uint16_t x,
 static bool pinnacle_should_start_absolute_tap_drag(const struct device *dev, uint16_t x,
 						   uint16_t y)
 {
-	const struct pinnacle_config *config = dev->config;
 	struct pinnacle_data *drv_data = dev->data;
 	int64_t elapsed_ms = k_uptime_get() - drv_data->last_tap_time_ms;
 	int32_t movement_x = pinnacle_abs32((int32_t)x - (int32_t)drv_data->last_tap_x);
 	int32_t movement_y = pinnacle_abs32((int32_t)y - (int32_t)drv_data->last_tap_y);
 
-	return config->absolute_tap_drag_enabled && drv_data->last_tap_time_ms > 0 &&
+	return cirque_state_get_tap_drag_enable(dev) && drv_data->last_tap_time_ms > 0 &&
 	       drv_data->last_tap_code == INPUT_BTN_0 &&
-	       elapsed_ms <= config->absolute_tap_drag_timeout_ms &&
-	       movement_x <= config->absolute_tap_drag_max_movement &&
-	       movement_y <= config->absolute_tap_drag_max_movement;
+	       elapsed_ms <= cirque_state_get_tap_drag_timeout_ms(dev) &&
+	       movement_x <= cirque_state_get_tap_drag_max_movement(dev) &&
+	       movement_y <= cirque_state_get_tap_drag_max_movement(dev);
 }
 
 static void pinnacle_handle_absolute_release(const struct device *dev)
 {
-	const struct pinnacle_config *config = dev->config;
 	struct pinnacle_data *drv_data = dev->data;
 
 	if (!drv_data->touching) {
@@ -1034,13 +1030,14 @@ static void pinnacle_handle_absolute_release(const struct device *dev)
 	int32_t movement_y = pinnacle_abs32((int32_t)drv_data->previous_abs_y -
 					     (int32_t)drv_data->touch_start_abs_y);
 
-	if (config->primary_tap_enabled && duration_ms <= config->absolute_tap_max_ms &&
-	    movement_x <= config->absolute_tap_max_movement &&
-	    movement_y <= config->absolute_tap_max_movement) {
+	if (cirque_state_get_primary_tap_enable(dev) &&
+	    duration_ms <= cirque_state_get_tap_max_ms(dev) &&
+	    movement_x <= cirque_state_get_tap_max_movement(dev) &&
+	    movement_y <= cirque_state_get_tap_max_movement(dev)) {
 		uint16_t code = pinnacle_absolute_tap_code(dev, drv_data->touch_current_x,
 								 drv_data->touch_current_y);
 		pinnacle_report_key(dev, code, true, true);
-		k_sleep(K_MSEC(config->absolute_tap_click_ms));
+		k_sleep(K_MSEC(cirque_state_get_tap_click_ms(dev)));
 		pinnacle_report_key(dev, code, false, true);
 
 		drv_data->last_tap_code = code;
@@ -1125,6 +1122,10 @@ int zmk_cirque_mode_apply(const struct device *dev, enum zmk_cirque_mode_action 
 		return rc;
 	}
 	drv_data->relative_mode = relative_mode;
+	/* Keep the runtime-state mirror in sync so a later apply_all (from the
+	 * Studio RPC) doesn't revert this keymap toggle, and so get_state reports
+	 * the mode the device actually runs. */
+	cirque_state_set_data_mode(dev, relative_mode ? 1 : 0);
 
 	rc = pinnacle_configure_idle_packets(dev, relative_mode);
 	if (rc) {
@@ -1207,7 +1208,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 
 	if (pinnacle_is_relative_mode(dev)) {
 		bool buttons_changed =
-			config->primary_tap_enabled && pinnacle_buttons_changed(drv_data, sample);
+			cirque_state_get_primary_tap_enable(dev) && pinnacle_buttons_changed(drv_data, sample);
 
 		if (sample->wheelCount != 0) {
 			pinnacle_report_rel(dev, INPUT_REL_WHEEL, sample->wheelCount, true);
@@ -1215,7 +1216,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 			pinnacle_report_rel(dev, INPUT_REL_X, sample->rel_x, false);
 			pinnacle_report_rel(dev, INPUT_REL_Y, sample->rel_y, !buttons_changed);
 		}
-		if (config->primary_tap_enabled) {
+		if (cirque_state_get_primary_tap_enable(dev)) {
 			bool secondary_changed = sample->btn_secondary != drv_data->btn_secondary;
 
 			pinnacle_report_button_if_changed(dev, INPUT_BTN_0, sample->btn_primary,
@@ -1246,7 +1247,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 		if (!drv_data->touching) {
 			if (drv_data->last_tap_time_ms > 0 &&
 			    k_uptime_get() - drv_data->last_tap_time_ms >
-				    config->absolute_tap_drag_timeout_ms) {
+				    cirque_state_get_tap_drag_timeout_ms(dev)) {
 				drv_data->last_tap_time_ms = 0;
 			}
 
@@ -1296,8 +1297,8 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 						    (int32_t)drv_data->touch_start_abs_y);
 
 		if (drv_data->absolute_tap_drag_candidate) {
-			if (movement_x <= config->absolute_tap_max_movement &&
-			    movement_y <= config->absolute_tap_max_movement) {
+			if (movement_x <= cirque_state_get_tap_max_movement(dev) &&
+			    movement_y <= cirque_state_get_tap_max_movement(dev)) {
 				drv_data->previous_abs_x = sample->abs_x;
 				drv_data->previous_abs_y = sample->abs_y;
 				drv_data->touch_current_x = sample->abs_x;
@@ -1314,9 +1315,9 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 		}
 
 		if (!drv_data->absolute_motion_started) {
-			if (config->primary_tap_enabled &&
-			    movement_x <= config->absolute_tap_max_movement &&
-			    movement_y <= config->absolute_tap_max_movement) {
+			if (cirque_state_get_primary_tap_enable(dev) &&
+			    movement_x <= cirque_state_get_tap_max_movement(dev) &&
+			    movement_y <= cirque_state_get_tap_max_movement(dev)) {
 				drv_data->previous_abs_x = sample->abs_x;
 				drv_data->previous_abs_y = sample->abs_y;
 				drv_data->touch_current_x = sample->abs_x;
@@ -1331,7 +1332,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 		int32_t delta_x = (int32_t)sample->abs_x - (int32_t)drv_data->previous_abs_x;
 		int32_t delta_y = (int32_t)sample->abs_y - (int32_t)drv_data->previous_abs_y;
 
-		pinnacle_apply_absolute_transform(config, &delta_x, &delta_y);
+		pinnacle_apply_absolute_transform(dev, &delta_x, &delta_y);
 		int16_t rel_x = pinnacle_scale_absolute_delta(dev, delta_x);
 		int16_t rel_y = pinnacle_scale_absolute_delta(dev, delta_y);
 
@@ -1406,6 +1407,8 @@ int pinnacle_init_interrupt(const struct device *dev)
 	return 0;
 }
 
+static void pinnacle_load_runtime_state(const struct device *dev);
+
 static int pinnacle_init(const struct device *dev)
 {
 	const struct pinnacle_config *config = dev->config;
@@ -1428,6 +1431,15 @@ static int pinnacle_init(const struct device *dev)
 		return rc;
 	}
 
+	/* Seed the runtime state cache with compile-time DT defaults before the
+	 * first register write, so pinnacle_set_sensitivity() and
+	 * pinnacle_configure_feed() below read the same values the rest of the
+	 * hot path will use. Behaviour-tunable fields no longer require a
+	 * reboot to take effect — cirque_driver_apply_all() re-pushes them to
+	 * the ASIC.
+	 */
+	pinnacle_load_runtime_state(dev);
+
 	/* Set trackpad sensitivity */
 	rc = pinnacle_set_sensitivity(dev);
 	if (rc) {
@@ -1436,7 +1448,7 @@ static int pinnacle_init(const struct device *dev)
 	}
 
 	value = 0x00;
-	if (config->sleep_mode_enable) {
+	if (cirque_state_get_sleep_mode_enable(dev)) {
 		value |= PINNACLE_SYS_CONFIG1_LOW_POWER_MODE;
 	}
 
@@ -1446,7 +1458,7 @@ static int pinnacle_init(const struct device *dev)
 		return rc;
 	}
 
-	drv_data->relative_mode = config->relative_mode;
+	drv_data->relative_mode = (cirque_state_get_data_mode(dev) == 1);
 
 	rc = pinnacle_configure_feed(dev, drv_data->relative_mode);
 	if (rc) {
@@ -1467,6 +1479,131 @@ static int pinnacle_init(const struct device *dev)
 	}
 
 	return 0;
+}
+
+static void pinnacle_load_runtime_state(const struct device *dev)
+{
+	const struct pinnacle_config *config = dev->config;
+	struct cirque_runtime_state *rt = cirque_driver_get_state(dev);
+
+	/* Start from the same defaults cirque_state_load_defaults() would use,
+	 * so any field not explicitly mapped below has a sane value rather than
+	 * the zero-init from .bss.
+	 */
+	cirque_state_load_defaults(dev);
+
+	/* Data mode + sensitivity. The DT sensitivity enum has 4 levels
+	 * (X1..X4) but the runtime state models only 2 (0=1x, 1=2x), so clamp.
+	 */
+	rt->data_mode   = config->relative_mode ? 1 : 0;
+	rt->sensitivity = (config->sensitivity >= PINNACLE_SENSITIVITY_X2) ? 1 : 0;
+
+	/* Axis transforms */
+	rt->invert_x  = config->invert_x;
+	rt->invert_y  = config->invert_y;
+	rt->swap_xy   = config->swap_xy;
+
+	/* Tap behaviour */
+	rt->primary_tap_enable        = config->primary_tap_enabled;
+	rt->tap_max_ms                = config->absolute_tap_max_ms;
+	rt->tap_max_movement          = config->absolute_tap_max_movement;
+	rt->tap_click_ms              = config->absolute_tap_click_ms;
+	rt->tap_drag_enable           = config->absolute_tap_drag_enabled;
+	rt->tap_drag_timeout_ms       = config->absolute_tap_drag_timeout_ms;
+	rt->tap_drag_max_movement     = config->absolute_tap_drag_max_movement;
+	rt->secondary_tap_area_width  = config->absolute_secondary_tap_area_width;
+	rt->secondary_tap_area_height = config->absolute_secondary_tap_area_height;
+	rt->aux_tap_area_width        = config->absolute_aux_tap_area_width;
+	rt->aux_tap_area_height       = config->absolute_aux_tap_area_height;
+
+	/* Edge motion */
+	rt->edge_motion_enable      = config->absolute_edge_motion_enabled;
+	rt->edge_motion_zone        = config->absolute_edge_motion_zone;
+	rt->edge_motion_speed       = config->absolute_edge_motion_speed;
+	rt->edge_motion_interval_ms = config->absolute_edge_motion_interval_ms;
+	rt->edge_motion_start_ms    = config->absolute_edge_motion_start_ms;
+
+	/* Edge scroll */
+	rt->right_edge_scroll_enable = config->absolute_right_edge_scroll_enabled;
+	rt->top_edge_scroll_enable   = config->absolute_top_edge_scroll_enabled;
+	rt->scroll_zone              = config->absolute_scroll_zone;
+	rt->scroll_divisor           = config->absolute_scroll_divisor;
+
+	/* Pointer scaling */
+	rt->absolute_relative_multiplier = config->absolute_relative_multiplier;
+	rt->absolute_relative_divisor    = config->absolute_relative_divisor;
+
+	/* Power */
+	rt->sleep_mode_enable = config->sleep_mode_enable;
+}
+
+/* Driver-side hooks consumed by src/studio/cirque_state.c.
+ * cirque_driver_get_state hands the runtime struct pointer back to the
+ * generic getter layer; cirque_driver_apply_all pushes the current runtime
+ * state into the ASIC registers (sensitivity, sleep mode, feed/data mode and
+ * idle-packet count).
+ */
+struct cirque_runtime_state *cirque_driver_get_state(const struct device *dev)
+{
+	struct pinnacle_data *drv_data = dev->data;
+
+	return &drv_data->rt;
+}
+
+void cirque_driver_apply_all(const struct device *dev)
+{
+	struct pinnacle_data *drv_data = dev->data;
+	bool relative = (cirque_state_get_data_mode(dev) == 1);
+	bool mode_changed = (relative != drv_data->relative_mode);
+	uint8_t value;
+	int rc;
+
+	rc = pinnacle_set_sensitivity(dev);
+	if (rc) {
+		LOG_ERR("Failed to apply sensitivity (%d)", rc);
+		return;
+	}
+
+	value = 0x00;
+	if (cirque_state_get_sleep_mode_enable(dev)) {
+		value |= PINNACLE_SYS_CONFIG1_LOW_POWER_MODE;
+	}
+	rc = pinnacle_write(dev, PINNACLE_REG_SYS_CONFIG1, value);
+	if (rc) {
+		LOG_ERR("Failed to apply sleep mode (%d)", rc);
+		return;
+	}
+
+	/* A data-mode change needs the same feed re-arm as zmk_cirque_mode_apply:
+	 * clear runtime touch/button state, then toggle the feed enable bit via
+	 * pinnacle_configure_feed below.
+	 */
+	if (mode_changed) {
+		pinnacle_clear_runtime_state(dev);
+	}
+
+	rc = pinnacle_configure_feed(dev, relative);
+	if (rc) {
+		LOG_ERR("Failed to apply feed config (%d)", rc);
+		return;
+	}
+	drv_data->relative_mode = relative;
+
+	rc = pinnacle_configure_idle_packets(dev, relative);
+	if (rc) {
+		LOG_ERR("Failed to apply idle packets (%d)", rc);
+		return;
+	}
+
+	rc = pinnacle_write(dev, PINNACLE_REG_STATUS1, 0x00);
+	if (rc) {
+		LOG_ERR("Failed to clear SW_CC and SW_DR (%d)", rc);
+		return;
+	}
+
+	if (mode_changed) {
+		zmk_cirque_mode_report(dev, relative);
+	}
 }
 
 #define PINNACLE_CONFIG_BUS_I2C(inst)                                                              \

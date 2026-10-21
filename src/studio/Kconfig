@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+
+menuconfig ZMK_CIRQUE
+	bool "Enable Cirque input module"
+	help
+	  Enable the tokyo2006/cirque-input-module: Cirque Pinnacle touch
+	  driver, trackpad behaviors, and (optionally) Studio RPC subsystem.
+
+if ZMK_CIRQUE
+
+config ZMK_CIRQUE_STUDIO_RPC
+	bool "Enable Cirque Studio custom RPC subsystem"
+	depends on ZMK_STUDIO
+	help
+	  Register the tokyo2006__cirque Studio RPC subsystem. Requires
+	  cormoran/zmk#main+custom-studio-protocol (or newer with the custom
+	  RPC headers) on the ZMK side.
+
+endif # ZMK_CIRQUE

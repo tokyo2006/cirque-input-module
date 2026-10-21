@@ -19,6 +19,7 @@ uint8_t zmk_pointing_speed_get_position(enum zmk_pointing_speed_target target);
 uint32_t zmk_pointing_speed_get_multiplier_q16(enum zmk_pointing_speed_target target);
 void zmk_pointing_speed_set_initial_position(enum zmk_pointing_speed_target target,
 					     uint8_t position);
+void zmk_pointing_speed_set_position(enum zmk_pointing_speed_target target, uint8_t position);
 void zmk_pointing_speed_set_range(enum zmk_pointing_speed_target target, uint16_t min_percent,
 				  uint16_t max_percent);
 void zmk_pointing_speed_adjust(enum zmk_pointing_speed_target target,

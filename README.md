@@ -58,6 +58,46 @@ west build -p -d right -b nice_nano//zmk -- \
   -DZMK_CONFIG="/path/to/Sweep-Pro/config"
 ```
 
+## DYA Studio Setup
+
+The `feat/dya-studio-rpc` branch adds a DYA Studio custom RPC endpoint for
+runtime Cirque configuration. To use it:
+
+1. Point your ZMK fork at the custom RPC branch (not `main+dya`):
+
+   ```yaml
+   manifest:
+     remotes:
+       - name: cormoran
+         url-base: https://github.com/cormoran
+       - name: tokyo2006
+         url-base: https://github.com/tokyo2006
+     projects:
+       - name: zmk
+         remote: cormoran
+         revision: main+custom-studio-protocol   # NOT main+dya
+         import: app/west.yml
+       - name: cirque-input-module
+         remote: tokyo2006
+         revision: feat/dya-studio-rpc
+   ```
+
+2. Enable the Studio RPC flags in your keyboard config:
+
+   ```conf
+   CONFIG_ZMK_CIRQUE_STUDIO_RPC=y
+   CONFIG_ZMK_CUSTOM_SETTINGS=y
+   CONFIG_ZMK_CUSTOM_SETTINGS_STUDIO_RPC=y
+   ```
+
+3. Build and flash as normal (`west build`, then flash).
+
+4. Open <https://studio.dya.cormoran.works/>, press `&studio_unlock`, and the
+   **Cirque** tab appears with a live state editor.
+
+> **Note:** `main+custom-studio-protocol` and `main+dya` are **mutually
+> exclusive** ZMK branches. Switching between them requires a clean rebuild.
+
 ## Device Tree
 
 Use `cirque,pinnacle2` for the trackpad node:

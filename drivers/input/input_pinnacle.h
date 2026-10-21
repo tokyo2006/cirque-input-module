@@ -4,6 +4,8 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/spi.h>
 
+#include <zmk/cirque_state.h>
+
 /*
  * Register Access Protocol Standard Registers.
  * Standard registers have 5-bit addresses, BIT[4:0], that range from
@@ -256,4 +258,6 @@ struct pinnacle_data {
 	bool btn_primary;
 	bool btn_secondary;
 	bool btn_aux;
+
+	struct cirque_runtime_state rt;
 };

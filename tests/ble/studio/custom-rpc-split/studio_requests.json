@@ -1,0 +1,18 @@
+[
+  {
+    "custom": {
+      "listCustomSubsystems": {}
+    }
+  },
+  {
+    "custom": {
+      "call": {
+        "subsystemIndex": 0,
+        "payload": {
+          "$type": "tokyo2006.cirque.Request",
+          "getState": {}
+        }
+      }
+    }
+  }
+]
