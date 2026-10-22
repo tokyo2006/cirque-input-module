@@ -131,6 +131,27 @@ properties:
       Height of the lower-right software secondary-tap area in absolute
       coordinates. Set to 0 to disable secondary tap detection.
 
+  absolute-secondary-tap-wedge-enable:
+    type: boolean
+    description: |
+      Use an angular wedge instead of the lower-right rectangle for secondary
+      tap detection. Intended for circular sensors (e.g. TM035035): the wedge
+      follows the rim, so a tap at 5 o'clock triggers at any radius while
+      3 o'clock and 6 o'clock stay on the primary button.
+
+  absolute-secondary-tap-min-slope-milli:
+    type: int
+    default: 700
+    description: |
+      Lower angle bound of the wedge, as tan(angle) * 1000, measured from
+      3 o'clock towards 6 o'clock. 700 = 35 degrees.
+
+  absolute-secondary-tap-max-slope-milli:
+    type: int
+    default: 11430
+    description: |
+      Upper angle bound of the wedge, as tan(angle) * 1000. 11430 = 85 degrees.
+
   absolute-aux-tap-area-width:
     type: int
     default: 0

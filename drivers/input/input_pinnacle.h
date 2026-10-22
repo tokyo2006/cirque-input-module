@@ -183,8 +183,13 @@ struct pinnacle_config {
 	uint16_t absolute_tap_click_ms;
 	uint16_t absolute_tap_drag_timeout_ms;
 	uint16_t absolute_tap_drag_max_movement;
+	/* Secondary tap: either the legacy lower-right rectangle or, on a round
+	 * pad, an angular wedge that follows the rim. */
 	uint16_t absolute_secondary_tap_area_width;
 	uint16_t absolute_secondary_tap_area_height;
+	uint16_t absolute_secondary_tap_min_slope_milli;
+	uint16_t absolute_secondary_tap_max_slope_milli;
+	bool absolute_secondary_tap_wedge_enabled;
 	uint16_t absolute_aux_tap_area_width;
 	uint16_t absolute_aux_tap_area_height;
 	uint16_t absolute_edge_motion_zone;

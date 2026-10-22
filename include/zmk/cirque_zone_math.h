@@ -54,3 +54,30 @@ static inline bool zmk_cirque_in_outer_ring(int32_t x_pct, int32_t y_pct, int32_
 
 	return distance_sq >= ring * ring;
 }
+
+/* Angular wedge in the bottom-right quadrant. Angles are measured from
+ * 3 o'clock (0 deg) towards 6 o'clock (90 deg) and are exact physical angles
+ * because the semi-axes normalisation already undoes the ellipse scaling.
+ *
+ * Slopes are given in thousandths (tan(angle) * 1000) so the test stays
+ * integer-only: 700 = tan(35 deg), 11430 = tan(85 deg). Points on the axes are
+ * excluded, which keeps 3 o'clock and 6 o'clock out of the wedge. */
+static inline bool zmk_cirque_in_bottom_right_wedge(int32_t x_pct, int32_t y_pct,
+						    int32_t min_slope_milli,
+						    int32_t max_slope_milli)
+{
+	if (x_pct <= 0 || y_pct <= 0) {
+		return false;
+	}
+
+	if ((int64_t)y_pct * 1000 < (int64_t)x_pct * min_slope_milli) {
+		return false;
+	}
+
+	if ((int64_t)y_pct * 1000 > (int64_t)x_pct * max_slope_milli) {
+		return false;
+	}
+
+	/* Keep the middle of the pad on the primary button. */
+	return (int64_t)x_pct * x_pct + (int64_t)y_pct * y_pct >= 30 * 30;
+}

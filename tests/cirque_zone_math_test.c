@@ -50,5 +50,18 @@ int main(void)
 	assert(!zmk_cirque_in_outer_ring(99, 0, 200));
 	assert(zmk_cirque_in_outer_ring(100, 0, 200));
 
+	/* Bottom-right wedge: 35..85 degrees from 3 o'clock, outside 30% radius.
+	 * 5 o'clock rim (50, 87) is slope 1.74; 4 o'clock (87, 50) is slope 0.57
+	 * and stays outside, as do the axes themselves. */
+	assert(zmk_cirque_in_bottom_right_wedge(50, 87, 700, 11430));   /* 5:00 */
+	assert(zmk_cirque_in_bottom_right_wedge(26, 97, 700, 11430));  /* 5:30 */
+	assert(zmk_cirque_in_bottom_right_wedge(40, 30, 700, 11430));  /* 37 deg */
+	assert(!zmk_cirque_in_bottom_right_wedge(87, 50, 700, 11430)); /* 4:00 */
+	assert(!zmk_cirque_in_bottom_right_wedge(100, 0, 700, 11430)); /* 3:00 */
+	assert(!zmk_cirque_in_bottom_right_wedge(0, 100, 700, 11430)); /* 6:00 */
+	assert(!zmk_cirque_in_bottom_right_wedge(-50, 87, 700, 11430));
+	assert(!zmk_cirque_in_bottom_right_wedge(20, 20, 700, 11430)); /* 28% radius */
+	assert(zmk_cirque_in_bottom_right_wedge(60, 60, 700, 11430));  /* 45 deg */
+
 	return 0;
 }

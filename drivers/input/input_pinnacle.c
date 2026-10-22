@@ -708,6 +708,22 @@ static bool pinnacle_absolute_point_in_lower_right(const struct device *dev,
 	uint16_t secondary_tap_area_width = cirque_state_get_secondary_tap_area_width(dev);
 	uint16_t secondary_tap_area_height = cirque_state_get_secondary_tap_area_height(dev);
 
+	/*
+	 * Round pads: use the physical angle instead of a rectangle. The wedge
+	 * follows the rim, so a tap at 5 o'clock triggers at any distance from the
+	 * centre while 6 o'clock and 3 o'clock stay on the primary button.
+	 */
+	if (config->absolute_secondary_tap_wedge_enabled) {
+		int32_t x_pct = zmk_cirque_axis_percent(x, pinnacle_abs_left(config),
+							pinnacle_abs_right(config));
+		int32_t y_pct = zmk_cirque_axis_percent(y, pinnacle_abs_top(config),
+							pinnacle_abs_bottom(config));
+
+		return zmk_cirque_in_bottom_right_wedge(x_pct, y_pct,
+							config->absolute_secondary_tap_min_slope_milli,
+							config->absolute_secondary_tap_max_slope_milli);
+	}
+
 	if (secondary_tap_area_width == 0 || secondary_tap_area_height == 0) {
 		return false;
 	}
@@ -973,7 +989,7 @@ static void pinnacle_report_absolute_scroll(const struct device *dev, uint16_t p
 		 * Y, but a sideways stroke with a little vertical jitter would
 		 * otherwise leak wheel ticks.
 		 */
-		if (pinnacle_abs32(delta) < pinnacle_abs32(current_x - previous_x)) {
+		if (pinnacle_abs32(delta) * 2 < pinnacle_abs32(current_x - previous_x)) {
 			delta = 0;
 		}
 		code = INPUT_REL_WHEEL;
@@ -1464,7 +1480,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 		if (drv_data->scroll_candidate_mode != PINNACLE_ABSOLUTE_SCROLL_NONE &&
 		    !drv_data->absolute_motion_started) {
 			if (movement_y >= PINNACLE_SCROLL_INTENT_UNITS &&
-			    movement_y > movement_x) {
+			    movement_y * 3 >= movement_x * 2) {
 				drv_data->scroll_mode = drv_data->scroll_candidate_mode;
 				drv_data->scroll_candidate_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 				drv_data->absolute_motion_started = true;
@@ -1477,7 +1493,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 			}
 
 			if (movement_x >= PINNACLE_SCROLL_INTENT_UNITS &&
-			    movement_x > movement_y) {
+			    movement_x * 3 >= movement_y * 2) {
 				drv_data->scroll_candidate_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 			}
 		}
@@ -1866,6 +1882,12 @@ void cirque_driver_apply_all(const struct device *dev)
 			DT_INST_PROP(inst, absolute_secondary_tap_area_width),                       \
 		.absolute_secondary_tap_area_height =                                              \
 			DT_INST_PROP(inst, absolute_secondary_tap_area_height),                      \
+		.absolute_secondary_tap_wedge_enabled =                                            \
+			DT_INST_PROP(inst, absolute_secondary_tap_wedge_enable),                     \
+		.absolute_secondary_tap_min_slope_milli =                                          \
+			DT_INST_PROP(inst, absolute_secondary_tap_min_slope_milli),                  \
+		.absolute_secondary_tap_max_slope_milli =                                          \
+			DT_INST_PROP(inst, absolute_secondary_tap_max_slope_milli),                  \
 		.absolute_aux_tap_area_width = DT_INST_PROP(inst, absolute_aux_tap_area_width),     \
 		.absolute_aux_tap_area_height = DT_INST_PROP(inst, absolute_aux_tap_area_height),   \
 		.absolute_edge_motion_zone = DT_INST_PROP(inst, absolute_edge_motion_zone),         \
