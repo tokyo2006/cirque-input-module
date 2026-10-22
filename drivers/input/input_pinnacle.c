@@ -39,6 +39,13 @@ static void pinnacle_tap_release_work_cb(struct k_work *work);
  */
 #define PINNACLE_SCROLL_RESUME_MS 500
 
+/*
+ * A rim touchdown only becomes a scroll after this much vertical-dominant
+ * movement (2.2 mm on the 31 mm pad). Without it a thumb resting near the rim
+ * turns every sideways stroke into wheel ticks.
+ */
+#define PINNACLE_SCROLL_INTENT_UNITS 100
+
 /* Consecutive below-threshold samples tolerated before a touch ends. */
 #define PINNACLE_TOUCH_LOST_SAMPLES 3
 
@@ -961,6 +968,14 @@ static void pinnacle_report_absolute_scroll(const struct device *dev, uint16_t p
 
 	if (drv_data->scroll_mode == PINNACLE_ABSOLUTE_SCROLL_VERTICAL) {
 		delta = previous_y - current_y;
+		/*
+		 * Ignore mostly-horizontal movement: the scroll axis is locked to
+		 * Y, but a sideways stroke with a little vertical jitter would
+		 * otherwise leak wheel ticks.
+		 */
+		if (pinnacle_abs32(delta) < pinnacle_abs32(current_x - previous_x)) {
+			delta = 0;
+		}
 		code = INPUT_REL_WHEEL;
 	} else {
 		delta = current_x - previous_x;
@@ -1131,6 +1146,7 @@ static void pinnacle_handle_absolute_release(const struct device *dev)
 	drv_data->touching = false;
 	drv_data->absolute_tap_drag_candidate = false;
 	drv_data->absolute_motion_started = false;
+	drv_data->scroll_candidate_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 	drv_data->scroll_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 	drv_data->scroll_remainder = 0;
 }
@@ -1164,6 +1180,7 @@ static void pinnacle_clear_runtime_state(const struct device *dev)
 	drv_data->tap_dragging = false;
 	drv_data->absolute_tap_drag_candidate = false;
 	drv_data->absolute_motion_started = false;
+	drv_data->scroll_candidate_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 	drv_data->scroll_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 	drv_data->scroll_remainder = 0;
 	drv_data->last_tap_time_ms = 0;
@@ -1362,6 +1379,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 			drv_data->absolute_tap_drag_candidate =
 				pinnacle_should_start_absolute_tap_drag(dev, sample->abs_x,
 									sample->abs_y);
+			drv_data->scroll_candidate_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 			if (drv_data->absolute_tap_drag_candidate) {
 				drv_data->scroll_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 			} else {
@@ -1392,6 +1410,18 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 					}
 				}
 			}
+
+			if (config->absolute_edge_scroll_ring_percent > 0) {
+				/*
+				 * Do not latch on touchdown. Landing near the rim is
+				 * common when the pad is used with a thumb, so wait for
+				 * a vertical-dominant stroke before turning the touch
+				 * into a scroll. A sideways swipe stays a pointer move.
+				 */
+				drv_data->scroll_candidate_mode = drv_data->scroll_mode;
+				drv_data->scroll_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
+			}
+
 			drv_data->absolute_motion_started =
 				drv_data->scroll_mode != PINNACLE_ABSOLUTE_SCROLL_NONE;
 			drv_data->scroll_remainder = 0;
@@ -1424,6 +1454,33 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 						    (int32_t)drv_data->touch_start_abs_x);
 		int32_t movement_y = pinnacle_abs32((int32_t)sample->abs_y -
 						    (int32_t)drv_data->touch_start_abs_y);
+
+		/*
+		 * Scroll intent: a touch that started near the rim only becomes a
+		 * scroll once the stroke is vertical-dominant. A horizontal swipe
+		 * clears the candidate and stays a pointer move, and vertical motion
+		 * away from the rim never becomes a candidate in the first place.
+		 */
+		if (drv_data->scroll_candidate_mode != PINNACLE_ABSOLUTE_SCROLL_NONE &&
+		    !drv_data->absolute_motion_started) {
+			if (movement_y >= PINNACLE_SCROLL_INTENT_UNITS &&
+			    movement_y > movement_x) {
+				drv_data->scroll_mode = drv_data->scroll_candidate_mode;
+				drv_data->scroll_candidate_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
+				drv_data->absolute_motion_started = true;
+				drv_data->scroll_remainder = 0;
+				drv_data->previous_abs_x = sample->abs_x;
+				drv_data->previous_abs_y = sample->abs_y;
+				drv_data->touch_current_x = sample->abs_x;
+				drv_data->touch_current_y = sample->abs_y;
+				return 0;
+			}
+
+			if (movement_x >= PINNACLE_SCROLL_INTENT_UNITS &&
+			    movement_x > movement_y) {
+				drv_data->scroll_candidate_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
+			}
+		}
 
 		if (drv_data->absolute_tap_drag_candidate) {
 			if (movement_x <= cirque_state_get_tap_max_movement(dev) &&

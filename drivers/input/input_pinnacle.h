@@ -247,6 +247,8 @@ struct pinnacle_data {
 	int64_t last_tap_time_ms;
 	int32_t scroll_remainder;
 	enum pinnacle_absolute_scroll_mode scroll_mode;
+	/* Rim touchdown that may become a scroll once the stroke is vertical. */
+	enum pinnacle_absolute_scroll_mode scroll_candidate_mode;
 	/* Ring-mode scroll resume: after a scroll touch ends (including a finger
 	 * sliding off the round pad) a new touch on the same side within this
 	 * window re-enters scroll mode instead of moving the pointer. */
