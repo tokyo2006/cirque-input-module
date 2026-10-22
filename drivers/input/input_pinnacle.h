@@ -247,6 +247,14 @@ struct pinnacle_data {
 	int64_t last_tap_time_ms;
 	int32_t scroll_remainder;
 	enum pinnacle_absolute_scroll_mode scroll_mode;
+	/* Ring-mode scroll resume: after a scroll touch ends (including a finger
+	 * sliding off the round pad) a new touch on the same side within this
+	 * window re-enters scroll mode instead of moving the pointer. */
+	enum pinnacle_absolute_scroll_mode last_scroll_mode;
+	int64_t scroll_resume_until_ms;
+	/* Consecutive samples below absolute-touch-min-z before the touch is
+	 * considered lifted; suppresses z flicker at the rim. */
+	uint8_t touch_lost_samples;
 	bool touching;
 	bool tap_dragging;
 	bool absolute_tap_drag_candidate;

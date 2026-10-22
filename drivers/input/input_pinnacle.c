@@ -30,6 +30,17 @@ LOG_MODULE_REGISTER(pinnacle, CONFIG_INPUT_LOG_LEVEL);
 #define PINNACLE_EDGE_SCROLL_MIN_AXIS_PERCENT 15
 
 /*
+ * After a ring-mode scroll touch ends, keep scrolling for this long when the
+ * finger comes back down on the same side. A 31 mm round pad only allows a
+ * ~15 mm stroke along the rim before the finger leaves the sensing area, so
+ * lift-and-reposition has to continue the scroll instead of moving the cursor.
+ */
+#define PINNACLE_SCROLL_RESUME_MS 500
+
+/* Consecutive below-threshold samples tolerated before a touch ends. */
+#define PINNACLE_TOUCH_LOST_SAMPLES 3
+
+/*
  * Driver-side hooks consumed by src/studio/cirque_state.c (which declares them
  * weak so it links without a trackpad device). Forward-declared here so
  * pinnacle_load_runtime_state() can call cirque_driver_get_state() before the
@@ -1060,8 +1071,14 @@ static void pinnacle_handle_absolute_release(const struct device *dev)
 		return;
 	}
 
+	if (drv_data->scroll_mode != PINNACLE_ABSOLUTE_SCROLL_NONE) {
+		drv_data->last_scroll_mode = drv_data->scroll_mode;
+		drv_data->scroll_resume_until_ms = k_uptime_get() + PINNACLE_SCROLL_RESUME_MS;
+	}
+
 	drv_data->scroll_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 	drv_data->scroll_remainder = 0;
+	drv_data->touch_lost_samples = 0;
 
 	int64_t duration_ms = k_uptime_get() - drv_data->touch_start_time_ms;
 	int32_t movement_x = pinnacle_abs32((int32_t)drv_data->previous_abs_x -
@@ -1123,6 +1140,9 @@ static void pinnacle_clear_runtime_state(const struct device *dev)
 	drv_data->scroll_remainder = 0;
 	drv_data->last_tap_time_ms = 0;
 	drv_data->last_tap_code = 0;
+	drv_data->last_scroll_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
+	drv_data->scroll_resume_until_ms = 0;
+	drv_data->touch_lost_samples = 0;
 }
 
 bool zmk_cirque_mode_is_relative(const struct device *dev)
@@ -1271,10 +1291,29 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 							  &drv_data->btn_aux, buttons_changed);
 		}
 	} else {
-		if (pinnacle_is_idle_sample(sample) || !pinnacle_is_absolute_touch_sample(dev, sample)) {
+		if (pinnacle_is_idle_sample(sample)) {
+			drv_data->touch_lost_samples = 0;
 			pinnacle_handle_absolute_release(dev);
 			return 0;
 		}
+
+		if (!pinnacle_is_absolute_touch_sample(dev, sample)) {
+			/*
+			 * Z flickers at the rim of a round pad. Requiring a few
+			 * consecutive misses keeps a scroll latch from being torn
+			 * down (and its wheel accumulator reset) mid-swipe.
+			 */
+			if (drv_data->touching &&
+			    ++drv_data->touch_lost_samples < PINNACLE_TOUCH_LOST_SAMPLES) {
+				return 0;
+			}
+
+			drv_data->touch_lost_samples = 0;
+			pinnacle_handle_absolute_release(dev);
+			return 0;
+		}
+
+		drv_data->touch_lost_samples = 0;
 
 		if (config->clipping_enabled) {
 			pinnacle_clip_sample(dev, sample);
@@ -1301,6 +1340,29 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 				drv_data->scroll_mode =
 					pinnacle_absolute_scroll_mode_for_touch(dev, sample->abs_x,
 										sample->abs_y);
+				/*
+				 * Ring mode: continue a scroll that just ended when the
+				 * finger comes back down on the same side (the pad is
+				 * round, so a stroke along the rim is short).
+				 */
+				if (drv_data->scroll_mode == PINNACLE_ABSOLUTE_SCROLL_NONE &&
+				    config->absolute_edge_scroll_ring_percent > 0 &&
+				    drv_data->last_scroll_mode != PINNACLE_ABSOLUTE_SCROLL_NONE &&
+				    k_uptime_get() <= drv_data->scroll_resume_until_ms) {
+					int32_t lx;
+					int32_t ly;
+					int32_t lw;
+					int32_t lh;
+
+					pinnacle_absolute_logical_position(dev, sample->abs_x,
+									   sample->abs_y, &lx, &ly, &lw,
+									   &lh);
+					if (zmk_cirque_axis_percent(lx, 0, lw) >=
+					    PINNACLE_EDGE_SCROLL_MIN_AXIS_PERCENT) {
+						drv_data->scroll_mode =
+							drv_data->last_scroll_mode;
+					}
+				}
 			}
 			drv_data->absolute_motion_started =
 				drv_data->scroll_mode != PINNACLE_ABSOLUTE_SCROLL_NONE;
