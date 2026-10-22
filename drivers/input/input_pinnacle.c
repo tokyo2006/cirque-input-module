@@ -41,10 +41,11 @@ static void pinnacle_tap_release_work_cb(struct k_work *work);
 
 /*
  * A rim touchdown only becomes a scroll after this much vertical-dominant
- * movement (2.2 mm on the 31 mm pad). Without it a thumb resting near the rim
- * turns every sideways stroke into wheel ticks.
+ * movement (~1.3 mm on the 31 mm pad; dy >= 0.6 dx). Without it a thumb
+ * resting near the rim turns every sideways stroke into wheel ticks, and too
+ * large a value makes a real edge swipe feel dead on a small pad.
  */
-#define PINNACLE_SCROLL_INTENT_UNITS 100
+#define PINNACLE_SCROLL_INTENT_UNITS 60
 
 /* Consecutive below-threshold samples tolerated before a touch ends. */
 #define PINNACLE_TOUCH_LOST_SAMPLES 3
@@ -989,7 +990,8 @@ static void pinnacle_report_absolute_scroll(const struct device *dev, uint16_t p
 		 * Y, but a sideways stroke with a little vertical jitter would
 		 * otherwise leak wheel ticks.
 		 */
-		if (pinnacle_abs32(delta) * 2 < pinnacle_abs32(current_x - previous_x)) {
+		if (pinnacle_abs32(delta) * 5 <
+		    pinnacle_abs32(current_x - previous_x) * 3) {
 			delta = 0;
 		}
 		code = INPUT_REL_WHEEL;
@@ -1501,7 +1503,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 		if (drv_data->scroll_candidate_mode != PINNACLE_ABSOLUTE_SCROLL_NONE &&
 		    !drv_data->absolute_motion_started) {
 			if (movement_y >= PINNACLE_SCROLL_INTENT_UNITS &&
-			    movement_y * 3 >= movement_x * 2) {
+			    movement_y * 5 >= movement_x * 3) {
 				drv_data->scroll_mode = drv_data->scroll_candidate_mode;
 				drv_data->scroll_candidate_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 				drv_data->absolute_motion_started = true;
@@ -1514,7 +1516,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 			}
 
 			if (movement_x >= PINNACLE_SCROLL_INTENT_UNITS &&
-			    movement_x * 3 >= movement_y * 2) {
+			    movement_x * 5 >= movement_y * 3) {
 				drv_data->scroll_candidate_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 			}
 		}
