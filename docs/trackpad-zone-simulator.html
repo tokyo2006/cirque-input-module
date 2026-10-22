@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cirque 触控板区域模拟器 · TM035035</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1d212a;
+    --line: #2a2f3a;
+    --text: #e6e9ef;
+    --muted: #8b93a3;
+    --ok: #3ecf8e;
+    --warn: #e5a13b;
+    --bad: #e5484d;
+    --accent: #4c8dff;
+    --wedge: rgba(229, 161, 59, .28);
+    --wedge-line: #e5a13b;
+    --ring: rgba(76, 141, 255, .22);
+    --ring-line: #4c8dff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    padding: 20px 24px 12px; border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0 0 4px; font-size: 18px; letter-spacing: .2px; }
+  header p { margin: 0; color: var(--muted); font-size: 12.5px; }
+  main {
+    display: grid; grid-template-columns: minmax(360px, 1fr) minmax(360px, 460px);
+    gap: 20px; padding: 20px 24px 40px; align-items: start;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px;
+  }
+  .card h2 {
+    margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .08em;
+  }
+  svg { display: block; width: 100%; height: auto; touch-action: none; cursor: crosshair; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .row { display: flex; align-items: center; gap: 10px; margin: 9px 0; }
+  .row label { flex: 0 0 122px; color: var(--muted); font-size: 12.5px; }
+  .row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .row .val { flex: 0 0 74px; text-align: right; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  .row input[type=checkbox] { accent-color: var(--accent); }
+  .verdict {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;
+  }
+  .verdict div {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
+    padding: 9px 11px; font-size: 12.5px;
+  }
+  .verdict b { display: block; color: var(--muted); font-weight: 500; font-size: 11px; margin-bottom: 3px; }
+  #log {
+    margin-top: 12px; height: 156px; overflow: auto; background: #0b0d11;
+    border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px;
+    font: 11.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: #b9c0cc;
+    white-space: pre-wrap;
+  }
+  .tests { margin-top: 12px; display: grid; gap: 6px; }
+  .test { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; }
+  .test .badge {
+    flex: 0 0 44px; text-align: center; border-radius: 5px; padding: 1px 0;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+  }
+  .pass .badge { background: rgba(62,207,142,.15); color: var(--ok); }
+  .fail .badge { background: rgba(229,72,77,.18); color: var(--bad); }
+  .test span { color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  code { background: #0b0d11; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 11.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cirque 触控板区域模拟器</h1>
+  <p>与固件同一套判定逻辑（wedge / ring / intent / tap）。在圆盘上按下并拖动即可看到固件会怎么判。</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>触控板地图（100% = 有效范围边界）</h2>
+    <svg id="pad" viewBox="-140 -140 280 280" aria-label="trackpad map"></svg>
+    <div class="legend">
+      <span><i style="background:var(--wedge);border:1px solid var(--wedge-line)"></i>右键楔形</span>
+      <span><i style="background:var(--ring);border:1px solid var(--ring-line)"></i>滚动带</span>
+      <span><i style="background:#2a2f3a"></i>不可感应边框（只读）</span>
+      <span><i style="background:none;border:1px dashed #6b7280;border-radius:50%"></i>实测可达边界</span>
+    </div>
+    <p class="hint">
+      拖动 = 一条手势；快速点一下 = 轻点。<code>z</code> 阈值与灵敏度不参与模拟（属于固定项）。
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>可调参数</h2>
+    <div class="row"><label>右键楔形宽度</label><input id="wedgeWidth" type="range" min="10" max="50" step="1" value="25"><span class="val" id="wedgeWidthV">25°</span></div>
+    <div class="row"><label>滚动带宽度</label><input id="ringPct" type="range" min="50" max="90" step="1" value="70"><span class="val" id="ringPctV">30%</span></div>
+    <div class="row"><label>滚动除数</label><input id="divisor" type="range" min="20" max="100" step="1" value="50"><span class="val" id="divisorV">50</span></div>
+    <div class="row"><label>滚动意图</label><input id="intent" type="range" min="20" max="160" step="5" value="60"><span class="val" id="intentV">60</span></div>
+    <div class="row"><label>轻点最长</label><input id="tapMax" type="range" min="150" max="400" step="10" value="250"><span class="val" id="tapMaxV">250 ms</span></div>
+    <div class="row"><label>轻点容差</label><input id="tapMove" type="range" min="80" max="300" step="10" value="180"><span class="val" id="tapMoveV">180</span></div>
+    <div class="row"><label>反转滚动</label><input id="invert" type="checkbox"><span class="val"></span></div>
+    <div class="row"><label>轻点拖拽</label><input id="drag" type="checkbox" checked><span class="val"></span></div>
+
+    <h2 style="margin-top:18px">判定结果</h2>
+    <div class="verdict">
+      <div><b>手势类型</b><span id="vType">—</span></div>
+      <div><b>滚轮格数</b><span id="vTicks">—</span></div>
+      <div><b>按键</b><span id="vButton">—</span></div>
+      <div><b>光标位移</b><span id="vMove">—</span></div>
+    </div>
+    <div id="log"></div>
+  </section>
+
+  <section class="card" style="grid-column: 1 / -1">
+    <h2>实测用例（同一套逻辑的回归测试）</h2>
+    <div class="tests" id="tests"></div>
+    <p class="hint">
+      用例坐标来自真机日志：5 点钟 46°、6 点钟 65~69°、可达半径约 77%（原始范围）/ 90%（当前有效范围）、中心 (0,0)。
+    </p>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ *
+ * 固定标定（与 cirque.dtsi / 固件常量一致）
+ * ------------------------------------------------------------------ */
+const FIXED = {
+  // active-range 262..1786 x 170..1366  → 以圆心对称的半轴（原始坐标单位）
+  halfX: 762,
+  halfY: 598,
+  // 34 / 36 号楔形：中心角固定（安装旋转），宽度可调
+  wedgeCenterDeg: 42.5,
+  wedgeInnerPct: 30,          // 半径 < 30% 不判右键
+  ringMinAxisPct: 15,         // 右侧判定：nx >= 15%
+  tapDragTimeoutMs: 300,
+  tapDragMaxMovement: 200,
+  clickMs: 50,
+  // 实测：模块边框死区 → 可达边界约为有效范围的 ~90%
+  reachablePct: 90,
+};
+
+let testsReady = false;   // 测试用例尚未定义时，参数绑定里的 runTests() 直接跳过
+
+/* 可调参数 */
+const P = {
+  wedgeWidthDeg: 25,
+  ringPct: 70,
+  divisor: 50,
+  intent: 60,
+  tapMaxMs: 250,
+  tapMove: 180,
+  invertScroll: false,
+  tapDragEnabled: true,
+};
+
+/* ------------------------------------------------------------------ *
+ * 数学：与 include/zmk/cirque_zone_math.h 一一对应
+ * ------------------------------------------------------------------ */
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const deg2rad = (d) => (d * Math.PI) / 180;
+
+function axisPercent(coord, min, max) {
+  if (max <= min) return 0;
+  const half = (max - min) / 2;
+  const c = clamp(coord, min, max);
+  return Math.round(((c - min - half) * 100) / half);
+}
+
+function inOuterRing(nx, ny, ringPct) {
+  if (ringPct <= 0) return false;
+  const r = Math.min(ringPct, 100);
+  return nx * nx + ny * ny >= r * r;
+}
+
+function inBottomRightWedge(nx, ny, minSlopeMilli, maxSlopeMilli) {
+  if (nx <= 0 || ny <= 0) return false;
+  if (ny * 1000 < nx * minSlopeMilli) return false;
+  if (ny * 1000 > nx * maxSlopeMilli) return false;
+  return nx * nx + ny * ny >= FIXED.wedgeInnerPct * FIXED.wedgeInnerPct;
+}
+
+const wMinDeg = () => FIXED.wedgeCenterDeg - P.wedgeWidthDeg / 2;
+const wMaxDeg = () => FIXED.wedgeCenterDeg + P.wedgeWidthDeg / 2;
+const minSlope = () => Math.round(Math.tan(deg2rad(wMinDeg())) * 1000);
+const maxSlope = () => Math.round(Math.tan(deg2rad(wMaxDeg())) * 1000);
+
+// 原始坐标（用于位移/滚动量，与固件一致）
+const rawX = (nx) => (nx / 100) * FIXED.halfX;
+const rawY = (ny) => (ny / 100) * FIXED.halfY;
+
+/* 区域判定（落点） */
+function zoneAt(nx, ny) {
+  if (inBottomRightWedge(nx, ny, minSlope(), maxSlope())) return "secondary";
+  return "primary";
+}
+
+function scrollModeForPoint(nx, ny) {
+  if (!inOuterRing(nx, ny, P.ringPct)) return "none";
+  if (nx >= FIXED.ringMinAxisPct) return "vertical";
+  return "none";
+}
+
+/* ------------------------------------------------------------------ *
+ * 手势状态机（镜像 drivers/input/input_pinnacle.c 的绝对模式）
+ * ------------------------------------------------------------------ */
+function newGesture() {
+  return {
+    touching: false, start: null, prev: null, startT: 0,
+    scrollMode: "none", scrollCandidate: "none", motionStarted: false,
+    tapDragCandidate: false, dragging: false,
+    ticks: 0, remainder: 0, movedX: 0, movedY: 0,
+    click: null, tapPending: false,
+  };
+}
+
+function beginGesture(g, nx, ny, t, lastTap) {
+  g.touching = true;
+  g.start = { nx, ny }; g.prev = { nx, ny }; g.startT = t;
+  g.ticks = 0; g.remainder = 0; g.movedX = 0; g.movedY = 0;
+  g.click = null; g.scrollMode = "none"; g.motionStarted = false;
+  g.dragging = false;
+
+  const d = lastTap && lastTap.code === 0 && lastTap.t
+    ? { dt: t - lastTap.t, dx: Math.abs(nx - lastTap.nx), dy: Math.abs(ny - lastTap.ny) }
+    : null;
+  g.tapDragCandidate = !!(P.tapDragEnabled && d && d.dt <= FIXED.tapDragTimeoutMs &&
+    rawX(d.dx) <= FIXED.tapDragMaxMovement && rawY(d.dy) <= FIXED.tapDragMaxMovement);
+
+  g.scrollCandidate = g.tapDragCandidate ? "none" : scrollModeForPoint(nx, ny);
+}
+
+function stepGesture(g, nx, ny) {
+  if (!g.touching) return;
+  if (g.scrollMode !== "none") {
+    const dxRaw = rawX(nx - g.prev.nx);
+    const dyRaw = rawY(g.prev.ny - ny);          // 固件：delta = prev_y - cur_y
+    // 横向分量超过竖直的 5/3 时丢弃
+    if (Math.abs(dyRaw) * 5 >= Math.abs(dxRaw) * 3) {
+      g.remainder += dyRaw;
+      const ticks = Math.trunc(g.remainder / P.divisor);
+      g.remainder -= ticks * P.divisor;
+      g.ticks += ticks;
+    }
+    g.prev = { nx, ny };
+    return;
+  }
+
+  const mx = Math.abs(rawX(nx - g.start.nx));
+  const my = Math.abs(rawY(ny - g.start.ny));
+
+  if (g.scrollCandidate !== "none" && !g.motionStarted) {
+    if (my >= P.intent && my * 5 >= mx * 3) {
+      g.scrollMode = g.scrollCandidate;
+      g.scrollCandidate = "none";
+      g.motionStarted = true;
+      g.remainder = 0;
+      g.prev = { nx, ny };
+      return;
+    }
+    if (mx >= P.intent && mx * 5 >= my * 3) {
+      g.scrollCandidate = "none";
+    }
+  }
+
+  if (g.tapDragCandidate) {
+    if (mx <= P.tapMove && my <= P.tapMove) { g.prev = { nx, ny }; return; }
+    g.dragging = true;
+    g.tapDragCandidate = false;
+    g.motionStarted = true;
+  }
+
+  if (!g.motionStarted) {
+    if (mx <= P.tapMove && my <= P.tapMove) { g.prev = { nx, ny }; return; }
+    g.motionStarted = true;
+  }
+
+  g.movedX += rawX(nx - g.prev.nx);
+  g.movedY += rawY(ny - g.prev.ny);
+  g.prev = { nx, ny };
+}
+
+function endGesture(g, t) {
+  if (!g.touching) return null;
+  const dur = t - g.startT;
+  const mx = Math.abs(rawX(g.prev.nx - g.start.nx));
+  const my = Math.abs(rawY(g.prev.ny - g.start.ny));
+  let result = { type: "pointer", ticks: 0, click: null, drag: false };
+
+  if (g.dragging) {
+    result = { type: "drag", ticks: 0, click: "left(hold)", drag: true };
+  } else if (g.scrollMode !== "none") {
+    result = { type: "scroll", ticks: g.ticks * (P.invertScroll ? -1 : 1), click: null, drag: false };
+  } else if (dur <= P.tapMaxMs && mx <= P.tapMove && my <= P.tapMove) {
+    const z = zoneAt(g.prev.nx, g.prev.ny);
+    result = {
+      type: "tap", ticks: 0,
+      click: z === "secondary" ? "right" : "left",
+      drag: false,
+    };
+  }
+  g.touching = false;
+  return result;
+}
+
+/* ------------------------------------------------------------------ *
+ * 绘制
+ * ------------------------------------------------------------------ */
+const SVGNS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("pad");
+const el = (name, attrs = {}) => {
+  const n = document.createElementNS(SVGNS, name);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  return n;
+};
+const pt = (r, deg) => [r * Math.cos(deg2rad(deg)), r * Math.sin(deg2rad(deg))];
+
+function arcPath(r, a0, a1) {
+  const [x0, y0] = pt(r, a0), [x1, y1] = pt(r, a1);
+  const large = Math.abs(a1 - a0) > 180 ? 1 : 0;
+  return `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1}`;
+}
+
+let fingerGroup = null;
+
+function drawStatic() {
+  svg.innerHTML = "";
+  const defs = el("defs");
+  const hatch = el("pattern", {
+    id: "hatch", width: 6, height: 6, patternUnits: "userSpaceOnUse",
+    patternTransform: "rotate(45)",
+  });
+  hatch.appendChild(el("rect", { width: 6, height: 6, fill: "#151922" }));
+  hatch.appendChild(el("line", { x1: 0, y1: 0, x2: 0, y2: 6, stroke: "#2f3542", "stroke-width": 1.4 }));
+  defs.appendChild(hatch);
+  svg.appendChild(defs);
+
+  // 死区（模块边框 100% → 117%）
+  svg.appendChild(el("circle", { cx: 0, cy: 0, r: 117, fill: "url(#hatch)", stroke: "#2a2f3a" }));
+  // 有效范围
+  svg.appendChild(el("circle", { cx: 0, cy: 0, r: 100, fill: "#0f1115", stroke: "#39404e" }));
+  // 实测可达边界
+  svg.appendChild(el("circle", {
+    cx: 0, cy: 0, r: FIXED.reachablePct, fill: "none", stroke: "#6b7280",
+    "stroke-dasharray": "2 3", "stroke-width": .8,
+  }));
+
+  // 滚动带（环 + 右侧扇区）
+  const a = Math.acos(FIXED.ringMinAxisPct / 100) * 180 / Math.PI; // nx=15% → ±81.4°
+  const band = `M ${pt(P.ringPct, -a).join(" ")} A ${P.ringPct} ${P.ringPct} 0 0 1 ${pt(P.ringPct, a).join(" ")}
+    L ${pt(100, a).join(" ")} A 100 100 0 0 0 ${pt(100, -a).join(" ")} Z`;
+  svg.appendChild(el("path", {
+    d: band, fill: "var(--ring)", stroke: "var(--ring-line)", "stroke-width": .9,
+  }));
+  // 滚动方向箭头
+  const arrow = (deg) => {
+    const [x, y] = pt((P.ringPct + 100) / 2, deg);
+    const up = !P.invertScroll;
+    svg.appendChild(el("text", {
+      x, y: y + 3, "text-anchor": "middle", "font-size": 9,
+      fill: "var(--ring-line)", "font-weight": 700,
+    })).textContent = up ? "↑" : "↓";
+  };
+  arrow(-40); arrow(0); arrow(40);
+
+  // 右键楔形
+  const [wx0, wy0] = pt(FIXED.wedgeInnerPct, wMinDeg());
+  const wedge = `M ${wx0} ${wy0} L ${pt(100, wMinDeg()).join(" ")}
+    A 100 100 0 0 1 ${pt(100, wMaxDeg()).join(" ")}
+    L ${pt(FIXED.wedgeInnerPct, wMaxDeg()).join(" ")}
+    A ${FIXED.wedgeInnerPct} ${FIXED.wedgeInnerPct} 0 0 0 ${wx0} ${wy0} Z`;
+  svg.appendChild(el("path", {
+    d: wedge, fill: "var(--wedge)", stroke: "var(--wedge-line)", "stroke-width": .9,
+  }));
+
+  // 楔形角度标注
+  const [lx, ly] = pt(108, FIXED.wedgeCenterDeg);
+  const label = el("text", {
+    x: lx, y: ly, "text-anchor": "middle", "font-size": 8,
+    fill: "var(--wedge-line)", "font-weight": 600,
+  });
+  label.textContent = `${wMinDeg()}°–${wMaxDeg()}°`;
+  svg.appendChild(label);
+
+  // 圆心 + 钟点参考
+  svg.appendChild(el("circle", { cx: 0, cy: 0, r: 1.6, fill: "#6b7280" }));
+  [["3", 0], ["6", 90], ["9", 180], ["12", -90]].forEach(([t, d]) => {
+    const [x, y] = pt(124, d);
+    const n = el("text", {
+      x, y: y + 3, "text-anchor": "middle", "font-size": 8, fill: "#5b6373",
+    });
+    n.textContent = t;
+    svg.appendChild(n);
+  });
+
+  fingerGroup = el("g");
+  svg.appendChild(fingerGroup);
+}
+
+function drawFinger(nx, ny, trail) {
+  if (!fingerGroup) return;
+  fingerGroup.innerHTML = "";
+  if (trail && trail.length > 1) {
+    fingerGroup.appendChild(el("polyline", {
+      points: trail.map((p) => pt(p.r, p.deg).join(",")).join(" "),
+      fill: "none", stroke: "#8ec5ff", "stroke-width": 1.2, "stroke-dasharray": "2 2",
+    }));
+  }
+  if (nx === null) return;
+  const [x, y] = pt(Math.hypot(nx, ny), Math.atan2(ny, nx) * 180 / Math.PI);
+  fingerGroup.appendChild(el("circle", {
+    cx: x, cy: y, r: 4, fill: "#8ec5ff", "fill-opacity": .85,
+  }));
+}
+
+/* ------------------------------------------------------------------ *
+ * 交互
+ * ------------------------------------------------------------------ */
+const ui = {
+  log: document.getElementById("log"),
+  vType: document.getElementById("vType"),
+  vTicks: document.getElementById("vTicks"),
+  vButton: document.getElementById("vButton"),
+  vMove: document.getElementById("vMove"),
+};
+
+function log(msg) {
+  const line = document.createElement("div");
+  line.textContent = msg;
+  ui.log.appendChild(line);
+  ui.log.scrollTop = ui.log.scrollHeight;
+}
+
+function setVerdict(r) {
+  const names = { pointer: "光标移动", tap: "轻点", scroll: "边缘滚动", drag: "轻点拖拽" };
+  ui.vType.textContent = names[r.type] || r.type;
+  ui.vTicks.textContent = r.type === "scroll" ? `${r.ticks > 0 ? "+" : ""}${r.ticks} 格` : "—";
+  ui.vButton.textContent = r.click === "right" ? "右键 (BTN_1)"
+    : r.click === "left" ? "左键 (BTN_0)"
+      : r.click === "left(hold)" ? "左键按住" : "—";
+  ui.vMove.textContent = r.type === "pointer"
+    ? `Δ ${Math.round(r.moveX || 0)}, ${Math.round(r.moveY || 0)} px` : "—";
+}
+
+function toPad(evt) {
+  const rect = svg.getBoundingClientRect();
+  const vb = 280; // viewBox 边长（-140..140）
+  const scale = vb / rect.width;
+  const x = (evt.clientX - rect.left) * scale - 140;
+  const y = (evt.clientY - rect.top) * scale - 140;
+  return { nx: (x / 100) * 100, ny: (y / 100) * 100 };
+}
+
+let g = newGesture();
+let lastTap = null;
+let trail = [];
+let lastDown = 0;
+
+svg.addEventListener("pointerdown", (evt) => {
+  evt.preventDefault();
+  svg.setPointerCapture(evt.pointerId);
+  const { nx, ny } = toPad(evt);
+  const t = performance.now();
+  lastDown = t;
+  trail = [{ r: Math.hypot(nx, ny), deg: Math.atan2(ny, nx) * 180 / Math.PI }];
+  beginGesture(g, nx, ny, t, lastTap);
+  drawFinger(nx, ny, trail);
+  log(`▼ down @ (${nx.toFixed(0)}, ${ny.toFixed(0)})  区域=${zoneAt(nx, ny)}  滚动候选=${g.scrollCandidate}`);
+});
+
+svg.addEventListener("pointermove", (evt) => {
+  if (!g.touching) return;
+  const { nx, ny } = toPad(evt);
+  stepGesture(g, nx, ny);
+  trail.push({ r: Math.hypot(nx, ny), deg: Math.atan2(ny, nx) * 180 / Math.PI });
+  drawFinger(nx, ny, trail);
+});
+
+svg.addEventListener("pointerup", (evt) => {
+  if (!g.touching) return;
+  const t = performance.now();
+  const r = endGesture(g, t);
+  r.moveX = g.movedX; r.moveY = g.movedY;
+  setVerdict(r);
+  drawFinger(null, null, trail);
+  log(`▲ up   ${r.type}${r.click ? " / " + r.click : ""}${r.type === "scroll" ? " / " + r.ticks + " 格" : ""}`);
+  if (r.type === "tap") {
+    lastTap = { t, nx: g.prev.nx, ny: g.prev.ny, code: r.click === "left" ? 0 : 1 };
+  } else {
+    lastTap = null;
+  }
+});
+
+/* ------------------------------------------------------------------ *
+ * 控件绑定
+ * ------------------------------------------------------------------ */
+function bindRange(id, key, fmt, redraw = true) {
+  const input = document.getElementById(id);
+  const out = document.getElementById(id + "V");
+  const sync = () => {
+    P[key] = Number(input.value);
+    out.textContent = fmt(P[key]);
+    if (redraw) drawStatic();
+    runTests();
+  };
+  input.addEventListener("input", sync);
+  sync();
+}
+
+bindRange("wedgeWidth", "wedgeWidthDeg", (v) => `${v}°`);
+bindRange("ringPct", "ringPct", (v) => `${100 - v}%`);
+bindRange("divisor", "divisor", (v) => `${v}`);
+bindRange("intent", "intent", (v) => `${v}`);
+bindRange("tapMax", "tapMaxMs", (v) => `${v} ms`);
+bindRange("tapMove", "tapMove", (v) => `${v}`);
+
+const invertEl = document.getElementById("invert");
+invertEl.addEventListener("change", () => { P.invertScroll = invertEl.checked; drawStatic(); runTests(); });
+const dragEl = document.getElementById("drag");
+dragEl.addEventListener("change", () => { P.tapDragEnabled = dragEl.checked; runTests(); });
+
+/* ------------------------------------------------------------------ *
+ * 回归测试（真机实测用例）
+ * ------------------------------------------------------------------ */
+function simulateTap(nx, ny, holdMs = 100) {
+  const gg = newGesture();
+  const t0 = 1000;
+  beginGesture(gg, nx, ny, t0, null);
+  stepGesture(gg, nx, ny);
+  return endGesture(gg, t0 + holdMs);
+}
+
+function simulateDrag(points, stepMs = 10) {
+  const gg = newGesture();
+  const t0 = 1000;
+  beginGesture(gg, points[0][0], points[0][1], t0, null);
+  for (let i = 1; i < points.length; i++) {
+    stepGesture(gg, points[i][0], points[i][1]);
+  }
+  const r = endGesture(gg, t0 + stepMs * points.length);
+  r.moveX = gg.movedX; r.moveY = gg.movedY;
+  return r;
+}
+
+const CASES = [  {
+    name: "5 点钟靠边 (46°, 90%) 轻点 → 右键",
+    run: () => simulateTap(90 * Math.cos(deg2rad(46)), 90 * Math.sin(deg2rad(46))).click === "right",
+  },
+  {
+    name: "6 点钟 (67°, 90%) 轻点 → 左键",
+    run: () => simulateTap(90 * Math.cos(deg2rad(67)), 90 * Math.sin(deg2rad(67))).click === "left",
+  },
+  {
+    name: "4:30 (41°, 90%) 轻点 → 右键",
+    run: () => simulateTap(90 * Math.cos(deg2rad(41)), 90 * Math.sin(deg2rad(41))).click === "right",
+  },
+  {
+    name: "3 点钟 (20°, 90%) 轻点 → 左键",
+    run: () => simulateTap(90 * Math.cos(deg2rad(20)), 90 * Math.sin(deg2rad(20))).click === "left",
+  },
+  {
+    name: "中心轻点 → 左键",
+    run: () => simulateTap(0, 0).click === "left",
+  },
+  {
+    name: "右边沿竖直下滑 3 mm → 滚动",
+    run: () => {
+      const r = simulateDrag([[75, -20], [75, -12], [75, -4], [75, 4], [75, 12]]);
+      return r.type === "scroll" && Math.abs(r.ticks) >= 1;
+    },
+  },
+  {
+    name: "右边沿横向滑动 → 不滚动",
+    run: () => {
+      const r = simulateDrag([[70, 10], [62, 10], [54, 10], [46, 10], [38, 10]]);
+      return r.type !== "scroll";
+    },
+  },
+  {
+    name: "中心竖直拖动 → 只动光标",
+    run: () => {
+      // 60% of the half-axis (~8 mm) is well beyond the tap tolerance
+      const r = simulateDrag([[0, 0], [0, 20], [0, 40], [0, 60]]);
+      return r.type === "pointer";
+    },
+  },
+];
+
+function runTests() {
+  if (!testsReady) return;
+  const host = document.getElementById("tests");
+  host.innerHTML = "";
+  let pass = 0;
+  for (const c of CASES) {
+    let ok = false;
+    try { ok = c.run(); } catch (e) { ok = false; }
+    if (ok) pass++;
+    const row = document.createElement("div");
+    row.className = "test " + (ok ? "pass" : "fail");
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = ok ? "PASS" : "FAIL";
+    const txt = document.createElement("span");
+    txt.textContent = c.name;
+    row.append(badge, txt);
+    host.appendChild(row);
+  }
+  document.querySelector(".tests").dataset.pass = `${pass}/${CASES.length}`;
+  const summary = document.getElementById("summary");
+  if (summary) summary.textContent = `${pass}/${CASES.length} passed`;
+}
+
+drawStatic();
+testsReady = true;
+runTests();
+log("模拟器就绪：在圆盘上按下并拖动，或快速点一下。");
+</script>
+</body>
+</html>
