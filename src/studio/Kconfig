@@ -16,4 +16,17 @@ config ZMK_CIRQUE_STUDIO_RPC
 	  cormoran/zmk#main+custom-studio-protocol (or newer with the custom
 	  RPC headers) on the ZMK side.
 
+config ZMK_CIRQUE_SETTINGS_PERSIST
+	bool "Persist Cirque runtime settings in NVS"
+	default y
+	depends on ZMK_CUSTOM_SETTINGS
+	help
+	  Store the 34 Cirque runtime settings in the custom-settings namespace
+	  so they survive reboots. Disable this to keep the devicetree values
+	  authoritative: the Studio page still applies changes live, but they are
+	  lost on reset and never shadow cirque.dtsi.
+
+	  Note that a persisted value always wins over the devicetree, so a stale
+	  NVS record makes later .dtsi tuning invisible. Disable for bring-up.
+
 endif # ZMK_CIRQUE

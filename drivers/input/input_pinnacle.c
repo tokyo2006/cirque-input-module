@@ -1392,6 +1392,20 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 
 			drv_data->touching = true;
 			drv_data->tap_dragging = false;
+
+			if (config->absolute_touch_log_enabled) {
+				int32_t lx;
+				int32_t ly;
+				int32_t lw;
+				int32_t lh;
+
+				pinnacle_absolute_logical_position(dev, sample->abs_x, sample->abs_y,
+								   &lx, &ly, &lw, &lh);
+				LOG_WRN("tp x=%u y=%u z=%u nx=%d ny=%d", sample->abs_x, sample->abs_y,
+					sample->abs_z, zmk_cirque_axis_percent(lx, 0, lw),
+					zmk_cirque_axis_percent(ly, 0, lh));
+			}
+
 			drv_data->absolute_tap_drag_candidate =
 				pinnacle_should_start_absolute_tap_drag(dev, sample->abs_x,
 									sample->abs_y);
@@ -1919,6 +1933,7 @@ void cirque_driver_apply_all(const struct device *dev)
 		.absolute_top_edge_scroll_enabled =                                              \
 			DT_INST_PROP(inst, absolute_top_edge_scroll_enable),                           \
 		.swap_xy = DT_INST_PROP(inst, swap_xy),                                            \
+		.absolute_touch_log_enabled = DT_INST_PROP(inst, absolute_touch_log_enable),        \
 	};                                                                                         \
 	static struct pinnacle_data pinnacle_data_##inst;                                          \
 	DEVICE_DT_INST_DEFINE(inst, pinnacle_init, NULL, &pinnacle_data_##inst,                    \

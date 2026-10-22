@@ -39,7 +39,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #define CIRQUE_NS "tokyo2006__cirque"
 
-#if IS_ENABLED(CONFIG_ZMK_CUSTOM_SETTINGS)
+#if IS_ENABLED(CONFIG_ZMK_CUSTOM_SETTINGS) && IS_ENABLED(CONFIG_ZMK_CIRQUE_SETTINGS_PERSIST)
 
 /* --------------------------------------------------------------------------
  * ZMK_CUSTOM_SETTING_DEFINE entries

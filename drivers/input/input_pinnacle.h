@@ -211,6 +211,7 @@ struct pinnacle_config {
 	bool absolute_right_edge_scroll_enabled;
 	bool absolute_top_edge_scroll_enabled;
 	bool swap_xy;
+	bool absolute_touch_log_enabled;
 
 	uint16_t active_range_x_min;
 	uint16_t active_range_x_max;

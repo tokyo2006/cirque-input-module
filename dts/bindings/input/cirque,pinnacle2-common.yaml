@@ -327,3 +327,10 @@ properties:
       In relative mode, set the hardware X/Y swap bit. In absolute mode, swap
       the software-generated relative deltas and logical edge coordinates.
       This is equivalent to rotating coordinates by 90 degrees.
+
+  absolute-touch-log-enable:
+    type: boolean
+    description: |
+      Log the absolute coordinates and normalized zone position of every touch
+      down at warning level. Intended for bring-up and zone calibration; leave
+      disabled in production firmware.
