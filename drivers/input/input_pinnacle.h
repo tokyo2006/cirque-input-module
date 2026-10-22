@@ -193,6 +193,7 @@ struct pinnacle_config {
 	uint16_t absolute_edge_motion_start_ms;
 	uint16_t absolute_scroll_zone;
 	uint16_t absolute_scroll_divisor;
+	uint8_t absolute_edge_scroll_ring_percent;
 
 	bool clipping_enabled;
 	bool scaling_enabled;

@@ -16,10 +16,18 @@
 
 #include <zmk/cirque_mode.h>
 #include <zmk/cirque_state.h>
+#include <zmk/cirque_zone_math.h>
 
 #include "input_pinnacle.h"
 
 LOG_MODULE_REGISTER(pinnacle, CONFIG_INPUT_LOG_LEVEL);
+
+/*
+ * In circular-ring mode, the touch also has to sit on the right/top side of the
+ * pad. 15% of the semi-axis keeps the 6 o'clock (bottom centre) and 9 o'clock
+ * (left) rim out of the scroll latch.
+ */
+#define PINNACLE_EDGE_SCROLL_MIN_AXIS_PERCENT 15
 
 /*
  * Driver-side hooks consumed by src/studio/cirque_state.c (which declares them
@@ -836,6 +844,7 @@ static void pinnacle_absolute_edge_motion_delta(const struct device *dev, int32_
 static enum pinnacle_absolute_scroll_mode
 pinnacle_absolute_scroll_mode_for_touch(const struct device *dev, uint16_t raw_x, uint16_t raw_y)
 {
+	const struct pinnacle_config *config = dev->config;
 	int32_t x;
 	int32_t y;
 	int32_t width;
@@ -844,14 +853,44 @@ pinnacle_absolute_scroll_mode_for_touch(const struct device *dev, uint16_t raw_x
 	int32_t zone_x;
 	int32_t zone_y;
 
-	if ((!cirque_state_get_right_edge_scroll_enable(dev) &&
-	     !cirque_state_get_top_edge_scroll_enable(dev)) || zone == 0) {
+	if (!cirque_state_get_right_edge_scroll_enable(dev) &&
+	    !cirque_state_get_top_edge_scroll_enable(dev)) {
+		return PINNACLE_ABSOLUTE_SCROLL_NONE;
+	}
+
+	if (config->absolute_edge_scroll_ring_percent == 0 && zone == 0) {
 		return PINNACLE_ABSOLUTE_SCROLL_NONE;
 	}
 
 	pinnacle_absolute_logical_position(dev, raw_x, raw_y, &x, &y, &width, &height);
 	zone_x = MIN(zone, width);
 	zone_y = MIN(zone, height);
+
+	/*
+	 * Round pads (TM035035 and friends): latch on the elliptical outer ring
+	 * instead of a rectangular band. At 4-6 o'clock the rim has a smaller
+	 * logical x than the rectangular threshold even though it is physically
+	 * at the edge, so the band below never fired there.
+	 */
+	if (config->absolute_edge_scroll_ring_percent > 0) {
+		int32_t x_pct = zmk_cirque_axis_percent(x, 0, width);
+		int32_t y_pct = zmk_cirque_axis_percent(y, 0, height);
+		int32_t ring = config->absolute_edge_scroll_ring_percent;
+
+		if (cirque_state_get_right_edge_scroll_enable(dev) &&
+		    x_pct >= PINNACLE_EDGE_SCROLL_MIN_AXIS_PERCENT &&
+		    zmk_cirque_in_outer_ring(x_pct, y_pct, ring)) {
+			return PINNACLE_ABSOLUTE_SCROLL_VERTICAL;
+		}
+
+		if (cirque_state_get_top_edge_scroll_enable(dev) &&
+		    y_pct <= -PINNACLE_EDGE_SCROLL_MIN_AXIS_PERCENT &&
+		    zmk_cirque_in_outer_ring(x_pct, y_pct, ring)) {
+			return PINNACLE_ABSOLUTE_SCROLL_HORIZONTAL;
+		}
+
+		return PINNACLE_ABSOLUTE_SCROLL_NONE;
+	}
 
 	if (cirque_state_get_right_edge_scroll_enable(dev) && x >= width - zone_x) {
 		return PINNACLE_ABSOLUTE_SCROLL_VERTICAL;
@@ -1658,6 +1697,8 @@ void cirque_driver_apply_all(const struct device *dev)
 		.absolute_edge_motion_start_ms = DT_INST_PROP(inst, absolute_edge_motion_start_ms), \
 		.absolute_scroll_zone = DT_INST_PROP(inst, absolute_scroll_zone),                   \
 		.absolute_scroll_divisor = DT_INST_PROP(inst, absolute_scroll_divisor),             \
+		.absolute_edge_scroll_ring_percent =                                               \
+			DT_INST_PROP(inst, absolute_edge_scroll_ring_percent),                     \
 		.sleep_mode_enable = DT_INST_PROP(inst, sleep_mode_enable),                        \
 		.clipping_enabled = DT_INST_PROP(inst, clipping_enable),                           \
 		.active_range_x_min = DT_INST_PROP(inst, active_range_x_min),                      \

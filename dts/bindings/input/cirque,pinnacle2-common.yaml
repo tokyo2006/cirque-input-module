@@ -205,6 +205,22 @@ properties:
       Coordinate delta divisor used when converting absolute edge movement to
       wheel ticks. Increase this value to make edge scrolling slower.
 
+  absolute-edge-scroll-ring-percent:
+    type: int
+    default: 0
+    description: |
+      Circular-sensor mode for latching edge scroll. The Pinnacle reports
+      absolute coordinates on a 2048x1536 grid; on a round pad the reachable
+      area is the ellipse inscribed in the active range (see the TM035035
+      datasheet, Figure 6), so a rectangular x band misses the rim at the
+      4-6 o'clock positions.
+
+      When non-zero, a touch latches vertical scrolling if it starts in the
+      outer ring that begins at this percentage of the elliptical radius
+      (100 = the rim) and on the right side (normalized x >= 15%). Values of
+      70 put the latch in the outer 30% of the radius. 0 keeps the legacy
+      rectangular behavior driven by absolute-scroll-zone.
+
   glide-extend-enable:
     type: boolean
     description: |
