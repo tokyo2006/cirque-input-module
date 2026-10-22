@@ -1359,6 +1359,13 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 		}
 
 		if (!pinnacle_is_absolute_touch_sample(dev, sample)) {
+			if (config->absolute_touch_log_enabled && sample->abs_z > 0 &&
+			    k_uptime_get() - drv_data->last_reject_log_ms > 500) {
+				drv_data->last_reject_log_ms = k_uptime_get();
+				LOG_WRN("tp rej x=%u y=%u z=%u", sample->abs_x, sample->abs_y,
+					sample->abs_z);
+			}
+
 			/*
 			 * Z flickers at the rim of a round pad. Requiring a few
 			 * consecutive misses keeps a scroll latch from being torn

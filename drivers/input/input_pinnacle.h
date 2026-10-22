@@ -263,6 +263,8 @@ struct pinnacle_data {
 	/* Consecutive samples below absolute-touch-min-z before the touch is
 	 * considered lifted; suppresses z flicker at the rim. */
 	uint8_t touch_lost_samples;
+	/* Rate limit for the bring-up "rejected sample" log. */
+	int64_t last_reject_log_ms;
 	/* Bounded HW_DR drain counter, reset on every real edge. */
 	uint8_t dr_drain_count;
 	/* Deferred tap button release (replaces a blocking k_sleep in the work
