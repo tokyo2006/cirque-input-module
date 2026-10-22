@@ -4,7 +4,6 @@
  */
 
 #include <errno.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -165,17 +164,55 @@ DEFINE_SETTER(uint16_t, abs_relative_multiplier,   absolute_relative_multiplier,
 DEFINE_SETTER(uint16_t, abs_relative_divisor,      absolute_relative_divisor,    validate_u16_any)
 DEFINE_SETTER(bool,     sleep_mode_enable,         sleep_mode_enable,         validate_bool_any)
 
+/* tan(deg) * 1000 for 0.0 .. 90.0 degrees in 0.5 degree steps. A table keeps
+ * libm (and ~280 KB of float code) out of the image: the wedge bounds only
+ * need 0.5 degree resolution. */
+static const uint16_t tan_milli_x1000[181] = {
+    0, 9, 17, 26, 35, 44, 52, 61, 70, 79, 87,
+    96, 105, 114, 123, 132, 141, 149, 158, 167, 176, 185,
+    194, 203, 213, 222, 231, 240, 249, 259, 268, 277, 287,
+    296, 306, 315, 325, 335, 344, 354, 364, 374, 384, 394,
+    404, 414, 424, 435, 445, 456, 466, 477, 488, 499, 510,
+    521, 532, 543, 554, 566, 577, 589, 601, 613, 625, 637,
+    649, 662, 675, 687, 700, 713, 727, 740, 754, 767, 781,
+    795, 810, 824, 839, 854, 869, 885, 900, 916, 933, 949,
+    966, 983, 1000, 1018, 1036, 1054, 1072, 1091, 1111, 1130, 1150,
+    1171, 1192, 1213, 1235, 1257, 1280, 1303, 1327, 1351, 1376, 1402,
+    1428, 1455, 1483, 1511, 1540, 1570, 1600, 1632, 1664, 1698, 1732,
+    1767, 1804, 1842, 1881, 1921, 1963, 2006, 2050, 2097, 2145, 2194,
+    2246, 2300, 2356, 2414, 2475, 2539, 2605, 2675, 2747, 2824, 2904,
+    2989, 3078, 3172, 3271, 3376, 3487, 3606, 3732, 3867, 4011, 4165,
+    4331, 4511, 4705, 4915, 5145, 5396, 5671, 5976, 6314, 6691, 7115,
+    7596, 8144, 8777, 9514, 10385, 11430, 12706, 14301, 16350, 19081, 22904,
+    28636, 38188, 57290, 65535, 65535,
+};
+
+static uint16_t tan_milli(uint16_t deg_tenths) {
+    uint16_t idx;
+
+    if (deg_tenths > 900) {
+        deg_tenths = 900;
+    }
+    /* nearest 0.5 degree entry */
+    idx = (uint16_t)((deg_tenths + 2) / 5);
+    if (idx > 180) {
+        idx = 180;
+    }
+    return tan_milli_x1000[idx];
+}
+
 /* Recompute the cached integer slopes from the centre/width pair. Runs on
  * settings changes and at init, never in the sampling hot path. */
 void cirque_state_refresh_wedge(const struct device *dev) {
     struct cirque_runtime_state *st = rt(dev);
-    float centre = st->secondary_tap_center_deg / 10.0f;
-    float width = st->secondary_tap_width_deg / 10.0f;
-    float lo = (centre - width / 2.0f) * 0.01745329252f;
-    float hi = (centre + width / 2.0f) * 0.01745329252f;
+    uint16_t half = st->secondary_tap_width_deg / 2;
+    uint16_t lo = st->secondary_tap_center_deg > half
+                      ? st->secondary_tap_center_deg - half
+                      : 0;
+    uint16_t hi = st->secondary_tap_center_deg + half;
 
-    st->wedge_min_slope_milli = (uint16_t)lroundf(tanf(lo) * 1000.0f);
-    st->wedge_max_slope_milli = (uint16_t)lroundf(tanf(hi) * 1000.0f);
+    st->wedge_min_slope_milli = tan_milli(lo);
+    st->wedge_max_slope_milli = tan_milli(hi);
 }
 
 int cirque_state_set_secondary_tap_center_deg(const struct device *dev, uint16_t v) {
