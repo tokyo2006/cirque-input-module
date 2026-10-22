@@ -4,6 +4,7 @@
  */
 
 #include <errno.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -72,6 +73,17 @@ static int validate_rotate(uint16_t v) {
 static int validate_scroll_divisor(uint16_t v) {
     return (v >= 1 && v <= 65535) ? 0 : -EINVAL;
 }
+static int validate_angle_tenths(uint16_t v) {
+    /* 0.0 .. 90.0 degrees, tenths */
+    return (v <= 900) ? 0 : -EINVAL;
+}
+static int validate_wedge_width(uint16_t v) {
+    /* 5.0 .. 80.0 degrees, tenths */
+    return (v >= 50 && v <= 800) ? 0 : -EINVAL;
+}
+static int validate_ring_percent(uint8_t v) {
+    return (v <= 100) ? 0 : -EINVAL;
+}
 
 DEFINE_GETTER(uint8_t,  data_mode,                 data_mode)
 DEFINE_GETTER(uint8_t,  sensitivity,               sensitivity)
@@ -90,6 +102,10 @@ DEFINE_GETTER(uint16_t, tap_drag_timeout_ms,       tap_drag_timeout_ms)
 DEFINE_GETTER(uint16_t, tap_drag_max_movement,     tap_drag_max_movement)
 DEFINE_GETTER(uint16_t, secondary_tap_area_width,  secondary_tap_area_width)
 DEFINE_GETTER(uint16_t, secondary_tap_area_height, secondary_tap_area_height)
+DEFINE_GETTER(uint16_t, secondary_tap_center_deg,  secondary_tap_center_deg)
+DEFINE_GETTER(uint16_t, secondary_tap_width_deg,   secondary_tap_width_deg)
+DEFINE_GETTER(uint16_t, wedge_min_slope,           wedge_min_slope_milli)
+DEFINE_GETTER(uint16_t, wedge_max_slope,           wedge_max_slope_milli)
 DEFINE_GETTER(uint16_t, aux_tap_area_width,        aux_tap_area_width)
 DEFINE_GETTER(uint16_t, aux_tap_area_height,       aux_tap_area_height)
 DEFINE_GETTER(bool,     edge_motion_enable,        edge_motion_enable)
@@ -101,6 +117,11 @@ DEFINE_GETTER(bool,     right_edge_scroll_enable,  right_edge_scroll_enable)
 DEFINE_GETTER(bool,     top_edge_scroll_enable,    top_edge_scroll_enable)
 DEFINE_GETTER(uint16_t, scroll_zone,               scroll_zone)
 DEFINE_GETTER(uint16_t, scroll_divisor,            scroll_divisor)
+DEFINE_GETTER(uint8_t,  edge_scroll_ring_percent,  edge_scroll_ring_percent)
+DEFINE_GETTER(uint16_t, active_range_x_min,        active_range_x_min)
+DEFINE_GETTER(uint16_t, active_range_x_max,        active_range_x_max)
+DEFINE_GETTER(uint16_t, active_range_y_min,        active_range_y_min)
+DEFINE_GETTER(uint16_t, active_range_y_max,        active_range_y_max)
 DEFINE_GETTER(bool,     invert_scroll,             invert_scroll)
 DEFINE_GETTER(uint32_t, relative_multiplier,       relative_multiplier)
 DEFINE_GETTER(uint32_t, relative_divisor,          relative_divisor)
@@ -136,12 +157,44 @@ DEFINE_SETTER(bool,     right_edge_scroll_enable,  right_edge_scroll_enable,  va
 DEFINE_SETTER(bool,     top_edge_scroll_enable,    top_edge_scroll_enable,    validate_bool_any)
 DEFINE_SETTER(uint16_t, scroll_zone,               scroll_zone,               validate_u16_any)
 DEFINE_SETTER(uint16_t, scroll_divisor,            scroll_divisor,            validate_scroll_divisor)
+DEFINE_SETTER(uint8_t,  edge_scroll_ring_percent,  edge_scroll_ring_percent,  validate_ring_percent)
 DEFINE_SETTER(bool,     invert_scroll,             invert_scroll,             validate_bool_any)
 DEFINE_SETTER(uint32_t, relative_multiplier,       relative_multiplier,       validate_u32_any)
 DEFINE_SETTER(uint32_t, relative_divisor,          relative_divisor,          validate_u32_any)
 DEFINE_SETTER(uint16_t, abs_relative_multiplier,   absolute_relative_multiplier, validate_u16_any)
 DEFINE_SETTER(uint16_t, abs_relative_divisor,      absolute_relative_divisor,    validate_u16_any)
 DEFINE_SETTER(bool,     sleep_mode_enable,         sleep_mode_enable,         validate_bool_any)
+
+/* Recompute the cached integer slopes from the centre/width pair. Runs on
+ * settings changes and at init, never in the sampling hot path. */
+void cirque_state_refresh_wedge(const struct device *dev) {
+    struct cirque_runtime_state *st = rt(dev);
+    float centre = st->secondary_tap_center_deg / 10.0f;
+    float width = st->secondary_tap_width_deg / 10.0f;
+    float lo = (centre - width / 2.0f) * 0.01745329252f;
+    float hi = (centre + width / 2.0f) * 0.01745329252f;
+
+    st->wedge_min_slope_milli = (uint16_t)lroundf(tanf(lo) * 1000.0f);
+    st->wedge_max_slope_milli = (uint16_t)lroundf(tanf(hi) * 1000.0f);
+}
+
+int cirque_state_set_secondary_tap_center_deg(const struct device *dev, uint16_t v) {
+    int rc = validate_angle_tenths(v);
+    if (rc != 0) return rc;
+    rt(dev)->secondary_tap_center_deg = v;
+    cirque_state_refresh_wedge(dev);
+    raise_trackpad_status_changed();
+    return 0;
+}
+
+int cirque_state_set_secondary_tap_width_deg(const struct device *dev, uint16_t v) {
+    int rc = validate_wedge_width(v);
+    if (rc != 0) return rc;
+    rt(dev)->secondary_tap_width_deg = v;
+    cirque_state_refresh_wedge(dev);
+    raise_trackpad_status_changed();
+    return 0;
+}
 
 int cirque_state_load_defaults(const struct device *dev) {
     cirque_state_apply_defaults(cirque_state_get_struct(dev));
@@ -169,6 +222,10 @@ static void cirque_state_apply_defaults(struct cirque_runtime_state *s) {
     s->tap_drag_max_movement       = CIRQUE_TAP_DRAG_MAX_MOVEMENT_DEFAULT;
     s->secondary_tap_area_width    = CIRQUE_SECONDARY_TAP_AREA_DEFAULT;
     s->secondary_tap_area_height   = CIRQUE_SECONDARY_TAP_AREA_DEFAULT;
+    s->secondary_tap_center_deg    = 0;
+    s->secondary_tap_width_deg     = 0;
+    s->wedge_min_slope_milli       = 0;
+    s->wedge_max_slope_milli       = 0;
     s->aux_tap_area_width          = CIRQUE_AUX_TAP_AREA_DEFAULT;
     s->aux_tap_area_height         = CIRQUE_AUX_TAP_AREA_DEFAULT;
     s->edge_motion_enable          = CIRQUE_EDGE_MOTION_ENABLE_DEFAULT;
@@ -180,12 +237,17 @@ static void cirque_state_apply_defaults(struct cirque_runtime_state *s) {
     s->top_edge_scroll_enable      = CIRQUE_TOP_EDGE_SCROLL_ENABLE_DEFAULT;
     s->scroll_zone                 = CIRQUE_SCROLL_ZONE_DEFAULT;
     s->scroll_divisor              = CIRQUE_SCROLL_DIVISOR_DEFAULT;
+    s->edge_scroll_ring_percent    = 0;
     s->invert_scroll               = CIRQUE_INVERT_SCROLL_DEFAULT;
     s->relative_multiplier         = CIRQUE_RELATIVE_MULTIPLIER_DEFAULT;
     s->relative_divisor            = CIRQUE_RELATIVE_DIVISOR_DEFAULT;
     s->absolute_relative_multiplier= CIRQUE_ABS_RELATIVE_MULTIPLIER_DEFAULT;
     s->absolute_relative_divisor   = CIRQUE_ABS_RELATIVE_DIVISOR_DEFAULT;
     s->sleep_mode_enable           = CIRQUE_SLEEP_MODE_ENABLE_DEFAULT;
+    s->active_range_x_min          = 0;
+    s->active_range_x_max          = 0;
+    s->active_range_y_min          = 0;
+    s->active_range_y_max          = 0;
 }
 
 int cirque_state_load_from_dt(const struct device *dev) {

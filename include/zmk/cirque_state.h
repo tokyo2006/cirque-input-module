@@ -74,6 +74,12 @@ struct cirque_runtime_state {
     uint16_t tap_drag_max_movement;
     uint16_t secondary_tap_area_width;
     uint16_t secondary_tap_area_height;
+    /* Angular secondary-tap wedge, tenths of a degree (circular sensors). */
+    uint16_t secondary_tap_center_deg;
+    uint16_t secondary_tap_width_deg;
+    /* Derived from the two fields above; cached so the hot path stays integer. */
+    uint16_t wedge_min_slope_milli;
+    uint16_t wedge_max_slope_milli;
     uint16_t aux_tap_area_width;
     uint16_t aux_tap_area_height;
 
@@ -89,6 +95,7 @@ struct cirque_runtime_state {
     bool top_edge_scroll_enable;
     uint16_t scroll_zone;
     uint16_t scroll_divisor;
+    uint8_t edge_scroll_ring_percent;
     bool invert_scroll;
 
     /* pointer scaling */
@@ -99,6 +106,12 @@ struct cirque_runtime_state {
 
     /* power */
     bool sleep_mode_enable;
+
+    /* Read-only geometry mirrored from the devicetree for the Studio UI. */
+    uint16_t active_range_x_min;
+    uint16_t active_range_x_max;
+    uint16_t active_range_y_min;
+    uint16_t active_range_y_max;
 };
 
 /* Getters (read-only, cheap) */
@@ -119,6 +132,10 @@ uint16_t cirque_state_get_tap_drag_timeout_ms(const struct device *dev);
 uint16_t cirque_state_get_tap_drag_max_movement(const struct device *dev);
 uint16_t cirque_state_get_secondary_tap_area_width(const struct device *dev);
 uint16_t cirque_state_get_secondary_tap_area_height(const struct device *dev);
+uint16_t cirque_state_get_secondary_tap_center_deg(const struct device *dev);
+uint16_t cirque_state_get_secondary_tap_width_deg(const struct device *dev);
+uint16_t cirque_state_get_wedge_min_slope(const struct device *dev);
+uint16_t cirque_state_get_wedge_max_slope(const struct device *dev);
 uint16_t cirque_state_get_aux_tap_area_width(const struct device *dev);
 uint16_t cirque_state_get_aux_tap_area_height(const struct device *dev);
 bool     cirque_state_get_edge_motion_enable(const struct device *dev);
@@ -130,6 +147,11 @@ bool     cirque_state_get_right_edge_scroll_enable(const struct device *dev);
 bool     cirque_state_get_top_edge_scroll_enable(const struct device *dev);
 uint16_t cirque_state_get_scroll_zone(const struct device *dev);
 uint16_t cirque_state_get_scroll_divisor(const struct device *dev);
+uint8_t  cirque_state_get_edge_scroll_ring_percent(const struct device *dev);
+uint16_t cirque_state_get_active_range_x_min(const struct device *dev);
+uint16_t cirque_state_get_active_range_x_max(const struct device *dev);
+uint16_t cirque_state_get_active_range_y_min(const struct device *dev);
+uint16_t cirque_state_get_active_range_y_max(const struct device *dev);
 bool     cirque_state_get_invert_scroll(const struct device *dev);
 uint32_t cirque_state_get_relative_multiplier(const struct device *dev);
 uint32_t cirque_state_get_relative_divisor(const struct device *dev);
@@ -155,6 +177,8 @@ int cirque_state_set_tap_drag_timeout_ms(const struct device *dev, uint16_t v);
 int cirque_state_set_tap_drag_max_movement(const struct device *dev, uint16_t v);
 int cirque_state_set_secondary_tap_area_width(const struct device *dev, uint16_t v);
 int cirque_state_set_secondary_tap_area_height(const struct device *dev, uint16_t v);
+int cirque_state_set_secondary_tap_center_deg(const struct device *dev, uint16_t v);
+int cirque_state_set_secondary_tap_width_deg(const struct device *dev, uint16_t v);
 int cirque_state_set_aux_tap_area_width(const struct device *dev, uint16_t v);
 int cirque_state_set_aux_tap_area_height(const struct device *dev, uint16_t v);
 int cirque_state_set_edge_motion_enable(const struct device *dev, bool v);
@@ -166,6 +190,11 @@ int cirque_state_set_right_edge_scroll_enable(const struct device *dev, bool v);
 int cirque_state_set_top_edge_scroll_enable(const struct device *dev, bool v);
 int cirque_state_set_scroll_zone(const struct device *dev, uint16_t v);
 int cirque_state_set_scroll_divisor(const struct device *dev, uint16_t v);
+int cirque_state_set_edge_scroll_ring_percent(const struct device *dev, uint8_t v);
+
+/* Recompute the cached slopes from centre/width. Called by the driver when it
+ * seeds the runtime state from the devicetree and by the two angle setters. */
+void cirque_state_refresh_wedge(const struct device *dev);
 int cirque_state_set_invert_scroll(const struct device *dev, bool v);
 int cirque_state_set_relative_multiplier(const struct device *dev, uint32_t v);
 int cirque_state_set_relative_divisor(const struct device *dev, uint32_t v);

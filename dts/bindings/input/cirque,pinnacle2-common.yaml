@@ -139,18 +139,21 @@ properties:
       follows the rim, so a tap at 5 o'clock triggers at any radius while
       3 o'clock and 6 o'clock stay on the primary button.
 
-  absolute-secondary-tap-min-slope-milli:
+  absolute-secondary-tap-center-deg:
     type: int
-    default: 700
+    default: 0
     description: |
-      Lower angle bound of the wedge, as tan(angle) * 1000, measured from
-      3 o'clock towards 6 o'clock. 700 = 35 degrees.
+      Centre angle of the angular secondary-tap wedge, in tenths of a degree,
+      measured from 3 o'clock towards 6 o'clock (0 = right, 900 = bottom).
+      This is a calibration value fixed by how the pad is mounted, so it is not
+      meant to be adjusted at runtime. 425 = 42.5 degrees.
 
-  absolute-secondary-tap-max-slope-milli:
+  absolute-secondary-tap-width-deg:
     type: int
-    default: 11430
+    default: 250
     description: |
-      Upper angle bound of the wedge, as tan(angle) * 1000. 11430 = 85 degrees.
+      Width of the angular wedge in tenths of a degree. 250 = 25 degrees, i.e.
+      30..55 degrees around a 42.5 degree centre. Exposed as a runtime setting.
 
   absolute-aux-tap-area-width:
     type: int

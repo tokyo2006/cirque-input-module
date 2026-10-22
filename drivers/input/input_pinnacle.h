@@ -187,8 +187,8 @@ struct pinnacle_config {
 	 * pad, an angular wedge that follows the rim. */
 	uint16_t absolute_secondary_tap_area_width;
 	uint16_t absolute_secondary_tap_area_height;
-	uint16_t absolute_secondary_tap_min_slope_milli;
-	uint16_t absolute_secondary_tap_max_slope_milli;
+	uint16_t absolute_secondary_tap_center_deg;
+	uint16_t absolute_secondary_tap_width_deg;
 	bool absolute_secondary_tap_wedge_enabled;
 	uint16_t absolute_aux_tap_area_width;
 	uint16_t absolute_aux_tap_area_height;

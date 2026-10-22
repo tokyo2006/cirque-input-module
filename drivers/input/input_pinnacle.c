@@ -624,33 +624,35 @@ static bool pinnacle_is_absolute_touch_sample(const struct device *dev,
 
 static void pinnacle_clip_sample(const struct device *dev, union pinnacle_sample *sample)
 {
-	const struct pinnacle_config *config = dev->config;
+	uint16_t x_min = cirque_state_get_active_range_x_min(dev);
+	uint16_t x_max = cirque_state_get_active_range_x_max(dev);
+	uint16_t y_min = cirque_state_get_active_range_y_min(dev);
+	uint16_t y_max = cirque_state_get_active_range_y_max(dev);
 
-	if (sample->abs_x < config->active_range_x_min) {
-		sample->abs_x = config->active_range_x_min;
+	if (sample->abs_x < x_min) {
+		sample->abs_x = x_min;
 	}
-	if (sample->abs_x > config->active_range_x_max) {
-		sample->abs_x = config->active_range_x_max;
+	if (sample->abs_x > x_max) {
+		sample->abs_x = x_max;
 	}
-	if (sample->abs_y < config->active_range_y_min) {
-		sample->abs_y = config->active_range_y_min;
+	if (sample->abs_y < y_min) {
+		sample->abs_y = y_min;
 	}
-	if (sample->abs_y > config->active_range_y_max) {
-		sample->abs_y = config->active_range_y_max;
+	if (sample->abs_y > y_max) {
+		sample->abs_y = y_max;
 	}
 }
 
 static void pinnacle_scale_sample(const struct device *dev, union pinnacle_sample *sample)
 {
 	const struct pinnacle_config *config = dev->config;
+	uint16_t x_min = cirque_state_get_active_range_x_min(dev);
+	uint16_t y_min = cirque_state_get_active_range_y_min(dev);
+	uint16_t range_x = cirque_state_get_active_range_x_max(dev) - x_min;
+	uint16_t range_y = cirque_state_get_active_range_y_max(dev) - y_min;
 
-	uint16_t range_x = config->active_range_x_max - config->active_range_x_min;
-	uint16_t range_y = config->active_range_y_max - config->active_range_y_min;
-
-	sample->abs_x = (uint16_t)((uint32_t)(sample->abs_x - config->active_range_x_min) *
-				   config->resolution_x / range_x);
-	sample->abs_y = (uint16_t)((uint32_t)(sample->abs_y - config->active_range_y_min) *
-				   config->resolution_y / range_y);
+	sample->abs_x = (uint16_t)((uint32_t)(sample->abs_x - x_min) * config->resolution_x / range_x);
+	sample->abs_y = (uint16_t)((uint32_t)(sample->abs_y - y_min) * config->resolution_y / range_y);
 }
 
 static int16_t pinnacle_scale_absolute_delta(const struct device *dev, int32_t delta)
@@ -682,24 +684,24 @@ static int32_t pinnacle_abs32(int32_t value)
 	return value < 0 ? -value : value;
 }
 
-static uint16_t pinnacle_abs_left(const struct pinnacle_config *config)
+static uint16_t pinnacle_abs_left(const struct device *dev)
 {
-	return config->active_range_x_min;
+	return cirque_state_get_active_range_x_min(dev);
 }
 
-static uint16_t pinnacle_abs_right(const struct pinnacle_config *config)
+static uint16_t pinnacle_abs_right(const struct device *dev)
 {
-	return config->active_range_x_max;
+	return cirque_state_get_active_range_x_max(dev);
 }
 
-static uint16_t pinnacle_abs_top(const struct pinnacle_config *config)
+static uint16_t pinnacle_abs_top(const struct device *dev)
 {
-	return config->active_range_y_min;
+	return cirque_state_get_active_range_y_min(dev);
 }
 
-static uint16_t pinnacle_abs_bottom(const struct pinnacle_config *config)
+static uint16_t pinnacle_abs_bottom(const struct device *dev)
 {
-	return config->active_range_y_max;
+	return cirque_state_get_active_range_y_max(dev);
 }
 
 static bool pinnacle_absolute_point_in_lower_right(const struct device *dev,
@@ -714,25 +716,29 @@ static bool pinnacle_absolute_point_in_lower_right(const struct device *dev,
 	 * follows the rim, so a tap at 5 o'clock triggers at any distance from the
 	 * centre while 6 o'clock and 3 o'clock stay on the primary button.
 	 */
+	if (!cirque_state_get_secondary_tap_enable(dev)) {
+		return false;
+	}
+
 	if (config->absolute_secondary_tap_wedge_enabled) {
-		int32_t x_pct = zmk_cirque_axis_percent(x, pinnacle_abs_left(config),
-							pinnacle_abs_right(config));
-		int32_t y_pct = zmk_cirque_axis_percent(y, pinnacle_abs_top(config),
-							pinnacle_abs_bottom(config));
+		int32_t x_pct = zmk_cirque_axis_percent(x, pinnacle_abs_left(dev),
+							pinnacle_abs_right(dev));
+		int32_t y_pct = zmk_cirque_axis_percent(y, pinnacle_abs_top(dev),
+							pinnacle_abs_bottom(dev));
 
 		return zmk_cirque_in_bottom_right_wedge(x_pct, y_pct,
-							config->absolute_secondary_tap_min_slope_milli,
-							config->absolute_secondary_tap_max_slope_milli);
+							cirque_state_get_wedge_min_slope(dev),
+							cirque_state_get_wedge_max_slope(dev));
 	}
 
 	if (secondary_tap_area_width == 0 || secondary_tap_area_height == 0) {
 		return false;
 	}
 
-	int32_t right = pinnacle_abs_right(config);
-	int32_t left = pinnacle_abs_left(config);
-	int32_t top = pinnacle_abs_top(config);
-	int32_t bottom = pinnacle_abs_bottom(config);
+	int32_t right = pinnacle_abs_right(dev);
+	int32_t left = pinnacle_abs_left(dev);
+	int32_t top = pinnacle_abs_top(dev);
+	int32_t bottom = pinnacle_abs_bottom(dev);
 	int32_t left_boundary = MAX(left, right - secondary_tap_area_width);
 	int32_t top_boundary = MAX(top, bottom - secondary_tap_area_height);
 
@@ -746,14 +752,15 @@ static bool pinnacle_absolute_point_in_upper_left(const struct device *dev,
 	uint16_t aux_tap_area_width = cirque_state_get_aux_tap_area_width(dev);
 	uint16_t aux_tap_area_height = cirque_state_get_aux_tap_area_height(dev);
 
-	if (aux_tap_area_width == 0 || aux_tap_area_height == 0) {
+	if (!cirque_state_get_aux_tap_enable(dev) || aux_tap_area_width == 0 ||
+	    aux_tap_area_height == 0) {
 		return false;
 	}
 
-	int32_t right = pinnacle_abs_right(config);
-	int32_t left = pinnacle_abs_left(config);
-	int32_t top = pinnacle_abs_top(config);
-	int32_t bottom = pinnacle_abs_bottom(config);
+	int32_t right = pinnacle_abs_right(dev);
+	int32_t left = pinnacle_abs_left(dev);
+	int32_t top = pinnacle_abs_top(dev);
+	int32_t bottom = pinnacle_abs_bottom(dev);
 	int32_t right_boundary = MIN(right, left + aux_tap_area_width);
 	int32_t bottom_boundary = MIN(bottom, top + aux_tap_area_height);
 
@@ -765,11 +772,10 @@ static void pinnacle_absolute_logical_position(const struct device *dev,
 					      int32_t *logical_x, int32_t *logical_y,
 					      int32_t *logical_width, int32_t *logical_height)
 {
-	const struct pinnacle_config *config = dev->config;
-	int32_t left = config->active_range_x_min;
-	int32_t right = config->active_range_x_max;
-	int32_t top = config->active_range_y_min;
-	int32_t bottom = config->active_range_y_max;
+	int32_t left = cirque_state_get_active_range_x_min(dev);
+	int32_t right = cirque_state_get_active_range_x_max(dev);
+	int32_t top = cirque_state_get_active_range_y_min(dev);
+	int32_t bottom = cirque_state_get_active_range_y_max(dev);
 	int32_t x = CLAMP((int32_t)raw_x, left, right) - left;
 	int32_t y = CLAMP((int32_t)raw_y, top, bottom) - top;
 	int32_t width = right - left;
@@ -902,7 +908,7 @@ pinnacle_absolute_scroll_mode_for_touch(const struct device *dev, uint16_t raw_x
 		return PINNACLE_ABSOLUTE_SCROLL_NONE;
 	}
 
-	if (config->absolute_edge_scroll_ring_percent == 0 && zone == 0) {
+	if (cirque_state_get_edge_scroll_ring_percent(dev) == 0 && zone == 0) {
 		return PINNACLE_ABSOLUTE_SCROLL_NONE;
 	}
 
@@ -916,10 +922,10 @@ pinnacle_absolute_scroll_mode_for_touch(const struct device *dev, uint16_t raw_x
 	 * logical x than the rectangular threshold even though it is physically
 	 * at the edge, so the band below never fired there.
 	 */
-	if (config->absolute_edge_scroll_ring_percent > 0) {
+	if (cirque_state_get_edge_scroll_ring_percent(dev) > 0) {
 		int32_t x_pct = zmk_cirque_axis_percent(x, 0, width);
 		int32_t y_pct = zmk_cirque_axis_percent(y, 0, height);
-		int32_t ring = config->absolute_edge_scroll_ring_percent;
+		int32_t ring = cirque_state_get_edge_scroll_ring_percent(dev);
 
 		if (cirque_state_get_right_edge_scroll_enable(dev) &&
 		    x_pct >= PINNACLE_EDGE_SCROLL_MIN_AXIS_PERCENT &&
@@ -1431,7 +1437,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 				 * round, so a stroke along the rim is short).
 				 */
 				if (drv_data->scroll_mode == PINNACLE_ABSOLUTE_SCROLL_NONE &&
-				    config->absolute_edge_scroll_ring_percent > 0 &&
+				    cirque_state_get_edge_scroll_ring_percent(dev) > 0 &&
 				    drv_data->last_scroll_mode != PINNACLE_ABSOLUTE_SCROLL_NONE &&
 				    k_uptime_get() <= drv_data->scroll_resume_until_ms) {
 					int32_t lx;
@@ -1450,7 +1456,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 				}
 			}
 
-			if (config->absolute_edge_scroll_ring_percent > 0) {
+			if (cirque_state_get_edge_scroll_ring_percent(dev) > 0) {
 				/*
 				 * Do not latch on touchdown. Landing near the rim is
 				 * common when the pad is used with a thumb, so wait for
@@ -1769,6 +1775,17 @@ static void pinnacle_load_runtime_state(const struct device *dev)
 	rt->tap_drag_max_movement     = config->absolute_tap_drag_max_movement;
 	rt->secondary_tap_area_width  = config->absolute_secondary_tap_area_width;
 	rt->secondary_tap_area_height = config->absolute_secondary_tap_area_height;
+	rt->secondary_tap_center_deg  = config->absolute_secondary_tap_center_deg;
+	rt->secondary_tap_width_deg   = config->absolute_secondary_tap_width_deg;
+	/* The enable flags used to be dead fields; seed them from the zone that is
+	 * actually configured so Studio toggles have an effect without changing
+	 * the behaviour of existing devicetrees. */
+	rt->secondary_tap_enable = config->absolute_secondary_tap_wedge_enabled ||
+				   (config->absolute_secondary_tap_area_width > 0 &&
+				    config->absolute_secondary_tap_area_height > 0);
+	rt->aux_tap_enable = config->absolute_aux_tap_area_width > 0 &&
+			     config->absolute_aux_tap_area_height > 0;
+	cirque_state_refresh_wedge(dev);
 	rt->aux_tap_area_width        = config->absolute_aux_tap_area_width;
 	rt->aux_tap_area_height       = config->absolute_aux_tap_area_height;
 
@@ -1784,10 +1801,17 @@ static void pinnacle_load_runtime_state(const struct device *dev)
 	rt->top_edge_scroll_enable   = config->absolute_top_edge_scroll_enabled;
 	rt->scroll_zone              = config->absolute_scroll_zone;
 	rt->scroll_divisor           = config->absolute_scroll_divisor;
+	rt->edge_scroll_ring_percent = config->absolute_edge_scroll_ring_percent;
 
 	/* Pointer scaling */
 	rt->absolute_relative_multiplier = config->absolute_relative_multiplier;
 	rt->absolute_relative_divisor    = config->absolute_relative_divisor;
+
+	/* Read-only geometry mirror for the Studio zone map. */
+	rt->active_range_x_min = config->active_range_x_min;
+	rt->active_range_x_max = config->active_range_x_max;
+	rt->active_range_y_min = config->active_range_y_min;
+	rt->active_range_y_max = config->active_range_y_max;
 
 	/* Power */
 	rt->sleep_mode_enable = config->sleep_mode_enable;
@@ -1907,10 +1931,10 @@ void cirque_driver_apply_all(const struct device *dev)
 			DT_INST_PROP(inst, absolute_secondary_tap_area_height),                      \
 		.absolute_secondary_tap_wedge_enabled =                                            \
 			DT_INST_PROP(inst, absolute_secondary_tap_wedge_enable),                     \
-		.absolute_secondary_tap_min_slope_milli =                                          \
-			DT_INST_PROP(inst, absolute_secondary_tap_min_slope_milli),                  \
-		.absolute_secondary_tap_max_slope_milli =                                          \
-			DT_INST_PROP(inst, absolute_secondary_tap_max_slope_milli),                  \
+		.absolute_secondary_tap_center_deg =                                               \
+			DT_INST_PROP(inst, absolute_secondary_tap_center_deg),                       \
+		.absolute_secondary_tap_width_deg =                                                \
+			DT_INST_PROP(inst, absolute_secondary_tap_width_deg),                        \
 		.absolute_aux_tap_area_width = DT_INST_PROP(inst, absolute_aux_tap_area_width),     \
 		.absolute_aux_tap_area_height = DT_INST_PROP(inst, absolute_aux_tap_area_height),   \
 		.absolute_edge_motion_zone = DT_INST_PROP(inst, absolute_edge_motion_zone),         \

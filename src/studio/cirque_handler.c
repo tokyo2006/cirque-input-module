@@ -112,6 +112,13 @@ static int handle_get_state(const tokyo2006_cirque_GetStateRequest *req,
     state.tap_drag_max_movement      = cirque_state_get_tap_drag_max_movement(dev);
     state.secondary_tap_area_width   = cirque_state_get_secondary_tap_area_width(dev);
     state.secondary_tap_area_height  = cirque_state_get_secondary_tap_area_height(dev);
+    state.secondary_tap_center_deg   = cirque_state_get_secondary_tap_center_deg(dev);
+    state.secondary_tap_width_deg    = cirque_state_get_secondary_tap_width_deg(dev);
+    state.edge_scroll_ring_percent   = cirque_state_get_edge_scroll_ring_percent(dev);
+    state.active_range_x_min         = cirque_state_get_active_range_x_min(dev);
+    state.active_range_x_max         = cirque_state_get_active_range_x_max(dev);
+    state.active_range_y_min         = cirque_state_get_active_range_y_min(dev);
+    state.active_range_y_max         = cirque_state_get_active_range_y_max(dev);
     state.aux_tap_area_width         = cirque_state_get_aux_tap_area_width(dev);
     state.aux_tap_area_height        = cirque_state_get_aux_tap_area_height(dev);
     state.edge_motion_enable         = cirque_state_get_edge_motion_enable(dev);
@@ -152,6 +159,13 @@ static int handle_get_state(const tokyo2006_cirque_GetStateRequest *req,
     state.has_tap_drag_max_movement = true;
     state.has_secondary_tap_area_width = true;
     state.has_secondary_tap_area_height = true;
+    state.has_secondary_tap_center_deg = true;
+    state.has_secondary_tap_width_deg = true;
+    state.has_edge_scroll_ring_percent = true;
+    state.has_active_range_x_min = true;
+    state.has_active_range_x_max = true;
+    state.has_active_range_y_min = true;
+    state.has_active_range_y_max = true;
     state.has_aux_tap_area_width = true;
     state.has_aux_tap_area_height = true;
     state.has_edge_motion_enable = true;
@@ -258,6 +272,15 @@ static int handle_set_state(const tokyo2006_cirque_SetStateRequest *req,
     }
     if (req->state.has_aux_tap_area_width) {
         APPLY(aux_tap_area_width,   cirque_state_set_aux_tap_area_width(dev, req->state.aux_tap_area_width));
+    }
+    if (req->state.has_secondary_tap_center_deg) {
+        APPLY(secondary_tap_center_deg, cirque_state_set_secondary_tap_center_deg(dev, (uint16_t)req->state.secondary_tap_center_deg));
+    }
+    if (req->state.has_secondary_tap_width_deg) {
+        APPLY(secondary_tap_width_deg, cirque_state_set_secondary_tap_width_deg(dev, (uint16_t)req->state.secondary_tap_width_deg));
+    }
+    if (req->state.has_edge_scroll_ring_percent) {
+        APPLY(edge_scroll_ring_percent, cirque_state_set_edge_scroll_ring_percent(dev, (uint8_t)req->state.edge_scroll_ring_percent));
     }
     if (req->state.has_aux_tap_area_height) {
         APPLY(aux_tap_area_height,  cirque_state_set_aux_tap_area_height(dev, req->state.aux_tap_area_height));
