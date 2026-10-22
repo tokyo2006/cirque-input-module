@@ -255,6 +255,11 @@ struct pinnacle_data {
 	/* Consecutive samples below absolute-touch-min-z before the touch is
 	 * considered lifted; suppresses z flicker at the rim. */
 	uint8_t touch_lost_samples;
+	/* Bounded HW_DR drain counter, reset on every real edge. */
+	uint8_t dr_drain_count;
+	/* Deferred tap button release (replaces a blocking k_sleep in the work
+	 * handler, which used to stall the system workqueue for tap-click-ms). */
+	uint16_t tap_pending_code;
 	bool touching;
 	bool tap_dragging;
 	bool absolute_tap_drag_candidate;
@@ -264,6 +269,7 @@ struct pinnacle_data {
 	struct gpio_callback dr_cb_data;
 	struct k_work work;
 	struct k_work_delayable edge_motion_work;
+	struct k_work_delayable tap_release_work;
 	bool btn_primary;
 	bool btn_secondary;
 	bool btn_aux;

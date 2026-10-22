@@ -22,6 +22,8 @@
 
 LOG_MODULE_REGISTER(pinnacle, CONFIG_INPUT_LOG_LEVEL);
 
+static void pinnacle_tap_release_work_cb(struct k_work *work);
+
 /*
  * In circular-ring mode, the touch also has to sit on the right/top side of the
  * pad. 15% of the semi-axis keeps the 6 o'clock (bottom centre) and 9 o'clock
@@ -41,13 +43,20 @@ LOG_MODULE_REGISTER(pinnacle, CONFIG_INPUT_LOG_LEVEL);
 #define PINNACLE_TOUCH_LOST_SAMPLES 3
 
 /*
+ * HW_DR is edge triggered. If the controller still asserts it after a read
+ * (another packet arrived while the work item was queued), no further edge
+ * will ever come and the pad goes silent. Drain it, but bound the retries so a
+ * dead bus cannot spin the system workqueue.
+ */
+#define PINNACLE_DR_DRAIN_MAX 8
+
+/*
  * Driver-side hooks consumed by src/studio/cirque_state.c (which declares them
  * weak so it links without a trackpad device). Forward-declared here so
  * pinnacle_load_runtime_state() can call cirque_driver_get_state() before the
  * definitions further down in this file.
  */
-struct cirque_runtime_state *cirque_driver_get_state(const struct device *dev);
-void cirque_driver_apply_all(const struct device *dev);
+struct cirque_runtime_state *cirque_driver_get_state(const struct device *dev);void cirque_driver_apply_all(const struct device *dev);
 
 static bool pinnacle_is_relative_mode(const struct device *dev)
 {
@@ -1092,9 +1101,22 @@ static void pinnacle_handle_absolute_release(const struct device *dev)
 	    movement_y <= cirque_state_get_tap_max_movement(dev)) {
 		uint16_t code = pinnacle_absolute_tap_code(dev, drv_data->touch_current_x,
 								 drv_data->touch_current_y);
+		/*
+		 * Press now and let a delayed work emit the release. Blocking here
+		 * with k_sleep(tap-click-ms) used to stall the system workqueue for
+		 * 50 ms per tap, which is long enough to miss HW_DR edges and stop
+		 * the trackpad until the next edge happens to arrive.
+		 */
+		if (drv_data->tap_pending_code != 0) {
+			k_work_cancel_delayable(&drv_data->tap_release_work);
+			pinnacle_report_key(dev, drv_data->tap_pending_code, false, true);
+			drv_data->tap_pending_code = 0;
+		}
+
 		pinnacle_report_key(dev, code, true, true);
-		k_sleep(K_MSEC(cirque_state_get_tap_click_ms(dev)));
-		pinnacle_report_key(dev, code, false, true);
+		drv_data->tap_pending_code = code;
+		k_work_reschedule(&drv_data->tap_release_work,
+				  K_MSEC(cirque_state_get_tap_click_ms(dev)));
 
 		drv_data->last_tap_code = code;
 		if (code == INPUT_BTN_0) {
@@ -1118,6 +1140,12 @@ static void pinnacle_clear_runtime_state(const struct device *dev)
 	struct pinnacle_data *drv_data = dev->data;
 
 	k_work_cancel_delayable(&drv_data->edge_motion_work);
+
+	if (drv_data->tap_pending_code != 0) {
+		k_work_cancel_delayable(&drv_data->tap_release_work);
+		pinnacle_report_key(dev, drv_data->tap_pending_code, false, true);
+		drv_data->tap_pending_code = 0;
+	}
 
 	if (drv_data->tap_dragging || drv_data->btn_primary) {
 		pinnacle_report_key(dev, INPUT_BTN_0, false, true);
@@ -1455,14 +1483,44 @@ static void pinnacle_data_ready_gpio_callback(const struct device *dev, struct g
 {
 	struct pinnacle_data *drv_data = CONTAINER_OF(cb, struct pinnacle_data, dr_cb_data);
 
+	drv_data->dr_drain_count = 0;
 	k_work_submit(&drv_data->work);
+}
+
+static void pinnacle_tap_release_work_cb(struct k_work *work)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct pinnacle_data *drv_data = CONTAINER_OF(dwork, struct pinnacle_data, tap_release_work);
+
+	if (drv_data->tap_pending_code == 0) {
+		return;
+	}
+
+	pinnacle_report_key(drv_data->dev, drv_data->tap_pending_code, false, true);
+	drv_data->tap_pending_code = 0;
 }
 
 static void pinnacle_work_cb(struct k_work *work)
 {
 	struct pinnacle_data *drv_data = CONTAINER_OF(work, struct pinnacle_data, work);
+	const struct pinnacle_config *config = drv_data->dev->config;
 
 	pinnacle_handle_interrupt(drv_data->dev);
+
+	/*
+	 * HW_DR is edge triggered: if the controller still has a packet pending
+	 * (it went high again while this work item was running) no new edge will
+	 * arrive and the pad would stay silent. Drain it, bounded.
+	 */
+	if (config->dr_gpio.port != NULL && gpio_pin_get_dt(&config->dr_gpio) > 0) {
+		if (drv_data->dr_drain_count++ < PINNACLE_DR_DRAIN_MAX) {
+			k_work_submit(&drv_data->work);
+		} else {
+			drv_data->dr_drain_count = 0;
+		}
+	} else {
+		drv_data->dr_drain_count = 0;
+	}
 }
 
 int pinnacle_init_interrupt(const struct device *dev)
@@ -1476,6 +1534,7 @@ int pinnacle_init_interrupt(const struct device *dev)
 	drv_data->dev = dev;
 	drv_data->work.handler = pinnacle_work_cb;
 	k_work_init_delayable(&drv_data->edge_motion_work, pinnacle_edge_motion_work_cb);
+	k_work_init_delayable(&drv_data->tap_release_work, pinnacle_tap_release_work_cb);
 
 	/* Configure GPIO pin for HW_DR signal */
 	rc = gpio_is_ready_dt(gpio);
