@@ -1003,6 +1003,11 @@ static void pinnacle_report_absolute_scroll(const struct device *dev, uint16_t p
 		code = INPUT_REL_WHEEL;
 	} else {
 		delta = current_x - previous_x;
+		/* Mirror of the vertical guard: ignore mostly-vertical movement. */
+		if (pinnacle_abs32(delta) * 5 <
+		    pinnacle_abs32(current_y - previous_y) * 3) {
+			delta = 0;
+		}
 		code = INPUT_REL_HWHEEL;
 	}
 
@@ -1501,15 +1506,19 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 						    (int32_t)drv_data->touch_start_abs_y);
 
 		/*
-		 * Scroll intent: a touch that started near the rim only becomes a
-		 * scroll once the stroke is vertical-dominant. A horizontal swipe
-		 * clears the candidate and stays a pointer move, and vertical motion
-		 * away from the rim never becomes a candidate in the first place.
+		 * Scroll intent: a touch that started in an edge ring only becomes a
+		 * scroll once the stroke runs along that edge. The axis depends on
+		 * the candidate: the right band scrolls on Y, the top band on X, so a
+		 * horizontal top-edge swipe must not be discarded as "not vertical".
 		 */
 		if (drv_data->scroll_candidate_mode != PINNACLE_ABSOLUTE_SCROLL_NONE &&
 		    !drv_data->absolute_motion_started) {
-			if (movement_y >= PINNACLE_SCROLL_INTENT_UNITS &&
-			    movement_y * 5 >= movement_x * 3) {
+			bool along_y = drv_data->scroll_candidate_mode ==
+				       PINNACLE_ABSOLUTE_SCROLL_VERTICAL;
+			int32_t along = along_y ? movement_y : movement_x;
+			int32_t across = along_y ? movement_x : movement_y;
+
+			if (along >= PINNACLE_SCROLL_INTENT_UNITS && along * 5 >= across * 3) {
 				drv_data->scroll_mode = drv_data->scroll_candidate_mode;
 				drv_data->scroll_candidate_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 				drv_data->absolute_motion_started = true;
@@ -1521,8 +1530,7 @@ static int pinnacle_handle_interrupt(const struct device *dev)
 				return 0;
 			}
 
-			if (movement_x >= PINNACLE_SCROLL_INTENT_UNITS &&
-			    movement_x * 5 >= movement_y * 3) {
+			if (across >= PINNACLE_SCROLL_INTENT_UNITS && across * 5 >= along * 3) {
 				drv_data->scroll_candidate_mode = PINNACLE_ABSOLUTE_SCROLL_NONE;
 			}
 		}
